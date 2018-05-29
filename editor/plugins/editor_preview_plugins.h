@@ -33,6 +33,8 @@
 
 #include "editor/editor_resource_preview.h"
 
+void post_process_preview(Ref<Image> p_image);
+
 class EditorTexturePreviewPlugin : public EditorResourcePreviewGenerator {
 	GDCLASS(EditorTexturePreviewPlugin, EditorResourcePreviewGenerator)
 public:
@@ -138,4 +140,27 @@ public:
 	~EditorMeshPreviewPlugin();
 };
 
+class EditorFontPreviewPlugin : public EditorResourcePreviewGenerator {
+
+	GDCLASS(EditorFontPreviewPlugin, EditorResourcePreviewGenerator)
+
+	RID viewport;
+	RID viewport_texture;
+	RID canvas;
+	RID canvas_item;
+	volatile bool preview_done;
+
+	void _preview_done(const Variant &p_udata);
+
+protected:
+	static void _bind_methods();
+
+public:
+	virtual bool handles(const String &p_type) const;
+	virtual Ref<Texture> generate(const RES &p_from);
+	virtual Ref<Texture> generate_from_path(const String &p_path);
+
+	EditorFontPreviewPlugin();
+	~EditorFontPreviewPlugin();
+};
 #endif // EDITORPREVIEWPLUGINS_H

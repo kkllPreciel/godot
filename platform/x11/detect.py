@@ -42,6 +42,11 @@ def can_build():
         print("xrandr not found.. x11 disabled.")
         return False
 
+    x11_error = os.system("pkg-config xrender --modversion > /dev/null ")
+    if (x11_error):
+        print("xrender not found.. x11 disabled.")
+        return False
+
     return True
 
 def get_opts():
@@ -141,6 +146,7 @@ def configure(env):
     env.ParseConfig('pkg-config xcursor --cflags --libs')
     env.ParseConfig('pkg-config xinerama --cflags --libs')
     env.ParseConfig('pkg-config xrandr --cflags --libs')
+    env.ParseConfig('pkg-config xrender --cflags --libs')
 
     if (env['touch']):
         x11_error = os.system("pkg-config xi --modversion > /dev/null ")
@@ -234,10 +240,10 @@ def configure(env):
         print("ALSA libraries not found, disabling driver")
 
     if env['pulseaudio']:
-        if (os.system("pkg-config --exists libpulse-simple") == 0): # 0 means found
+        if (os.system("pkg-config --exists libpulse") == 0): # 0 means found
             print("Enabling PulseAudio")
             env.Append(CPPFLAGS=["-DPULSEAUDIO_ENABLED"])
-            env.ParseConfig('pkg-config --cflags --libs libpulse-simple')
+            env.ParseConfig('pkg-config --cflags --libs libpulse')
         else:
             print("PulseAudio development libraries not found, disabling driver")
 

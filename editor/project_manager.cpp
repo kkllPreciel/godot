@@ -199,6 +199,7 @@ private:
 					sp = TTR("Imported Project");
 
 				project_name->set_text(sp);
+				_text_changed(sp);
 			}
 		}
 
@@ -222,6 +223,7 @@ private:
 		}
 		String sp = p.simplify_path();
 		project_path->set_text(sp);
+		_path_text_changed(sp);
 		get_ok()->call_deferred("grab_focus");
 	}
 
@@ -230,6 +232,7 @@ private:
 		String p = p_path;
 		String sp = p.simplify_path();
 		project_path->set_text(sp);
+		_path_text_changed(sp);
 		get_ok()->call_deferred("grab_focus");
 	}
 
@@ -250,8 +253,10 @@ private:
 
 	void _create_folder() {
 
-		if (project_name->get_text() == "" || created_folder_path != "")
+		if (project_name->get_text() == "" || created_folder_path != "" || project_name->get_text().ends_with(".") || project_name->get_text().ends_with(" ")) {
+			set_message(TTR("Invalid Project Name."), MESSAGE_WARNING);
 			return;
+		}
 
 		DirAccess *d = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
 		if (d->change_dir(project_path->get_text()) == OK) {
@@ -261,7 +266,9 @@ private:
 				if (d->make_dir(project_name->get_text()) == OK) {
 
 					d->change_dir(project_name->get_text());
-					project_path->set_text(d->get_current_dir());
+					String dir_str = d->get_current_dir();
+					project_path->set_text(dir_str);
+					_path_text_changed(dir_str);
 					created_folder_path = d->get_current_dir();
 					create_dir->set_disabled(true);
 				} else {
@@ -473,7 +480,9 @@ private:
 		_remove_created_folder();
 
 		project_path->clear();
+		_path_text_changed("");
 		project_name->clear();
+		_text_changed("");
 
 		if (status_rect->get_texture() == get_icon("StatusError", "EditorIcons"))
 			msg->show();
@@ -538,7 +547,9 @@ public:
 				msg->show();
 				get_ok()->set_disabled(true);
 			} else if (current->has_setting("application/config/name")) {
-				project_name->set_text(current->get("application/config/name"));
+				String proj = current->get("application/config/name");
+				project_name->set_text(proj);
+				_text_changed(proj);
 			}
 
 			project_name->call_deferred("grab_focus");
@@ -557,7 +568,9 @@ public:
 				fdialog->set_current_dir(d->get_current_dir());
 				memdelete(d);
 			}
-			project_name->set_text(TTR("New Game Project"));
+			String proj = TTR("New Game Project");
+			project_name->set_text(proj);
+			_text_changed(proj);
 
 			project_path->set_editable(true);
 			browse->set_disabled(false);
@@ -723,9 +736,11 @@ void ProjectManager::_update_project_buttons() {
 		}
 	}
 
-	erase_btn->set_disabled(selected_list.size() < 1);
-	open_btn->set_disabled(selected_list.size() < 1);
-	rename_btn->set_disabled(selected_list.size() < 1);
+	bool empty_selection = selected_list.empty();
+	erase_btn->set_disabled(empty_selection);
+	open_btn->set_disabled(empty_selection);
+	rename_btn->set_disabled(empty_selection);
+	run_btn->set_disabled(empty_selection);
 }
 
 void ProjectManager::_panel_input(const Ref<InputEvent> &p_ev, Node *p_hb) {
@@ -1517,18 +1532,43 @@ ProjectManager::ProjectManager() {
 	EditorSettings::get_singleton()->set_optimize_save(false); //just write settings as they came
 
 	{
-		int dpi_mode = EditorSettings::get_singleton()->get("interface/editor/hidpi_mode");
-		if (dpi_mode == 0) {
-			const int screen = OS::get_singleton()->get_current_screen();
-			editor_set_scale(OS::get_singleton()->get_screen_dpi(screen) >= 192 && OS::get_singleton()->get_screen_size(screen).x > 2000 ? 2.0 : 1.0);
-		} else if (dpi_mode == 1) {
-			editor_set_scale(0.75);
-		} else if (dpi_mode == 2) {
-			editor_set_scale(1.0);
-		} else if (dpi_mode == 3) {
-			editor_set_scale(1.5);
-		} else if (dpi_mode == 4) {
-			editor_set_scale(2.0);
+		int display_scale = EditorSettings::get_singleton()->get("interface/editor/display_scale");
+		float custom_display_scale = EditorSettings::get_singleton()->get("interface/editor/custom_display_scale");
+
+		switch (display_scale) {
+			case 0: {
+				// Try applying a suitable display scale automatically
+				const int screen = OS::get_singleton()->get_current_screen();
+				editor_set_scale(OS::get_singleton()->get_screen_dpi(screen) >= 192 && OS::get_singleton()->get_screen_size(screen).x > 2000 ? 2.0 : 1.0);
+			} break;
+
+			case 1: {
+				editor_set_scale(0.75);
+			} break;
+
+			case 2: {
+				editor_set_scale(1.0);
+			} break;
+
+			case 3: {
+				editor_set_scale(1.25);
+			} break;
+
+			case 4: {
+				editor_set_scale(1.5);
+			} break;
+
+			case 5: {
+				editor_set_scale(1.75);
+			} break;
+
+			case 6: {
+				editor_set_scale(2.0);
+			} break;
+
+			default: {
+				editor_set_scale(custom_display_scale);
+			} break;
 		}
 	}
 

@@ -171,6 +171,7 @@ public:
 	void restore_editor_global_states();
 
 	void add_custom_type(const String &p_type, const String &p_inherits, const Ref<Script> &p_script, const Ref<Texture> &p_icon);
+	Object *instance_custom_type(const String &p_type, const String &p_inherits);
 	void remove_custom_type(const String &p_type);
 	const Map<String, Vector<CustomType> > &get_custom_types() const { return custom_types; }
 
@@ -196,6 +197,7 @@ public:
 	NodePath get_edited_scene_live_edit_root();
 	bool check_and_update_scene(int p_idx);
 	void move_edited_scene_to_index(int p_idx);
+	bool call_build();
 
 	void set_plugin_window_layout(Ref<ConfigFile> p_layout);
 	void get_plugin_window_layout(Ref<ConfigFile> p_layout);
@@ -203,6 +205,7 @@ public:
 	void save_edited_scene_state(EditorSelection *p_selection, EditorHistory *p_history, const Dictionary &p_custom);
 	Dictionary restore_edited_scene_state(EditorSelection *p_selection, EditorHistory *p_history);
 	void notify_edited_scene_changed();
+	void notify_resource_saved(const Ref<Resource> &p_resource);
 
 	EditorData();
 };
@@ -224,7 +227,6 @@ private:
 	List<Node *> selected_node_list;
 
 	void _update_nl();
-	Array _get_selected_nodes();
 	Array _get_transformable_selected_nodes();
 	void _emit_change();
 
@@ -232,6 +234,7 @@ protected:
 	static void _bind_methods();
 
 public:
+	Array get_selected_nodes();
 	void add_node(Node *p_node);
 	void remove_node(Node *p_node);
 	bool is_selected(Node *) const;

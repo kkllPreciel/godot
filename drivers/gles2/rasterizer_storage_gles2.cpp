@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -450,6 +450,11 @@ void RasterizerStorageGLES2::texture_set_data(RID p_texture, const Ref<Image> &p
 	}
 
 	texture->mipmaps = mipmaps;
+}
+
+void RasterizerStorageGLES2::texture_set_data_partial(RID p_texture, const Ref<Image> &p_image, int src_x, int src_y, int src_w, int src_h, int dst_x, int dst_y, int p_dst_mip, VS::CubeMapSide p_cube_side) {
+	// TODO
+	ERR_PRINT("Not implemented (ask Karroffel to do it :p)");
 }
 
 Ref<Image> RasterizerStorageGLES2::texture_get_data(RID p_texture, VS::CubeMapSide p_cube_side) const {
@@ -1295,6 +1300,10 @@ void RasterizerStorageGLES2::skeleton_bone_set_transform_2d(RID p_skeleton, int 
 
 Transform2D RasterizerStorageGLES2::skeleton_bone_get_transform_2d(RID p_skeleton, int p_bone) const {
 	return Transform2D();
+}
+
+void RasterizerStorageGLES2::skeleton_set_base_transform_2d(RID p_skeleton, const Transform2D &p_base_transform) {
+
 }
 
 void RasterizerStorageGLES2::update_dirty_skeletons() {

@@ -94,6 +94,14 @@ Point2 Control::_edit_get_position() const {
 	return get_position();
 };
 
+void Control::_edit_set_scale(const Size2 &p_scale) {
+	set_scale(p_scale);
+}
+
+Size2 Control::_edit_get_scale() const {
+	return data.scale;
+}
+
 void Control::_edit_set_rect(const Rect2 &p_edit_rect) {
 	set_position((get_position() + get_transform().basis_xform(p_edit_rect.position)).snapped(Vector2(1, 1)));
 	set_size(p_edit_rect.size.snapped(Vector2(1, 1)));
@@ -147,12 +155,21 @@ Size2 Control::get_custom_minimum_size() const {
 	return data.custom_minimum_size;
 }
 
-Size2 Control::get_combined_minimum_size() const {
+void Control::_update_minimum_size_cache() {
 
 	Size2 minsize = get_minimum_size();
 	minsize.x = MAX(minsize.x, data.custom_minimum_size.x);
 	minsize.y = MAX(minsize.y, data.custom_minimum_size.y);
-	return minsize;
+	data.minimum_size_cache = minsize;
+	data.minimum_size_valid = true;
+}
+
+Size2 Control::get_combined_minimum_size() const {
+
+	if (!data.minimum_size_valid) {
+		const_cast<Control *>(this)->_update_minimum_size_cache();
+	}
+	return data.minimum_size_cache;
 }
 
 Size2 Control::_edit_get_minimum_size() const {
@@ -251,14 +268,18 @@ void Control::_update_minimum_size() {
 	if (!is_inside_tree())
 		return;
 
-	data.pending_min_size_update = false;
 	Size2 minsize = get_combined_minimum_size();
 	if (minsize.x > data.size_cache.x ||
 			minsize.y > data.size_cache.y) {
 		_size_changed();
 	}
 
-	emit_signal(SceneStringNames::get_singleton()->minimum_size_changed);
+	data.updating_last_minimum_size = false;
+
+	if (minsize != data.last_minimum_size) {
+		data.last_minimum_size = minsize;
+		emit_signal(SceneStringNames::get_singleton()->minimum_size_changed);
+	}
 }
 
 bool Control::_get(const StringName &p_name, Variant &r_ret) const {
@@ -429,8 +450,12 @@ void Control::_notification(int p_notification) {
 
 		case NOTIFICATION_ENTER_TREE: {
 
-			_size_changed();
-
+		} break;
+		case NOTIFICATION_POST_ENTER_TREE: {
+			if (is_visible_in_tree()) {
+				data.minimum_size_valid = false;
+				_size_changed();
+			}
 		} break;
 		case NOTIFICATION_EXIT_TREE: {
 
@@ -612,13 +637,12 @@ void Control::_notification(int p_notification) {
 
 				if (is_inside_tree()) {
 					_modal_stack_remove();
-					minimum_size_changed();
 				}
 
 				//remove key focus
 				//remove modalness
 			} else {
-
+				data.minimum_size_valid = false;
 				_size_changed();
 			}
 
@@ -1281,22 +1305,24 @@ void Control::_size_changed() {
 
 	Size2 minimum_size = get_combined_minimum_size();
 
-	if (data.h_grow == GROW_DIRECTION_BEGIN) {
-		if (minimum_size.width > new_size_cache.width) {
-			new_pos_cache.x = new_pos_cache.x + new_size_cache.width - minimum_size.width;
-			new_size_cache.width = minimum_size.width;
+	if (minimum_size.width > new_size_cache.width) {
+		if (data.h_grow == GROW_DIRECTION_BEGIN) {
+			new_pos_cache.x += new_size_cache.width - minimum_size.width;
+		} else if (data.h_grow == GROW_DIRECTION_BOTH) {
+			new_pos_cache.x += 0.5 * (new_size_cache.width - minimum_size.width);
 		}
-	} else {
-		new_size_cache.width = MAX(minimum_size.width, new_size_cache.width);
+
+		new_size_cache.width = minimum_size.width;
 	}
 
-	if (data.v_grow == GROW_DIRECTION_BEGIN) {
-		if (minimum_size.height > new_size_cache.height) {
-			new_pos_cache.y = new_pos_cache.y + new_size_cache.height - minimum_size.height;
-			new_size_cache.height = minimum_size.height;
+	if (minimum_size.height > new_size_cache.height) {
+		if (data.v_grow == GROW_DIRECTION_BEGIN) {
+			new_pos_cache.y += new_size_cache.height - minimum_size.height;
+		} else if (data.v_grow == GROW_DIRECTION_BOTH) {
+			new_pos_cache.y += 0.5 * (new_size_cache.height - minimum_size.height);
 		}
-	} else {
-		new_size_cache.height = MAX(minimum_size.height, new_size_cache.height);
+
+		new_size_cache.height = minimum_size.height;
 	}
 
 	// We use a little workaround to avoid flickering when moving the pivot with _edit_set_pivot()
@@ -2454,17 +2480,25 @@ void Control::minimum_size_changed() {
 	if (!is_inside_tree() || data.block_minimum_size_adjust)
 		return;
 
-	if (data.pending_min_size_update)
+	Control *invalidate = this;
+
+	//invalidate cache upwards
+	while (invalidate && invalidate->data.minimum_size_valid) {
+		invalidate->data.minimum_size_valid = false;
+		if (invalidate->is_set_as_toplevel())
+			break; // do not go further up
+		invalidate = invalidate->data.parent;
+	}
+
+	if (!is_visible_in_tree())
 		return;
 
-	data.pending_min_size_update = true;
-	MessageQueue::get_singleton()->push_call(this, "_update_minimum_size");
+	if (data.updating_last_minimum_size)
+		return;
 
-	if (!is_toplevel_control()) {
-		Control *pc = get_parent_control();
-		if (pc)
-			pc->minimum_size_changed();
-	}
+	data.updating_last_minimum_size = true;
+
+	MessageQueue::get_singleton()->push_call(this, "_update_minimum_size");
 }
 
 int Control::get_v_size_flags() const {
@@ -2838,8 +2872,8 @@ void Control::_bind_methods() {
 	ADD_PROPERTYINZ(PropertyInfo(Variant::INT, "margin_bottom", PROPERTY_HINT_RANGE, "-4096,4096"), "set_margin", "get_margin", MARGIN_BOTTOM);
 
 	ADD_GROUP("Grow Direction", "grow_");
-	ADD_PROPERTYNO(PropertyInfo(Variant::INT, "grow_horizontal", PROPERTY_HINT_ENUM, "Begin,End"), "set_h_grow_direction", "get_h_grow_direction");
-	ADD_PROPERTYNO(PropertyInfo(Variant::INT, "grow_vertical", PROPERTY_HINT_ENUM, "Begin,End"), "set_v_grow_direction", "get_v_grow_direction");
+	ADD_PROPERTYNO(PropertyInfo(Variant::INT, "grow_horizontal", PROPERTY_HINT_ENUM, "Begin,End,Both"), "set_h_grow_direction", "get_h_grow_direction");
+	ADD_PROPERTYNO(PropertyInfo(Variant::INT, "grow_vertical", PROPERTY_HINT_ENUM, "Begin,End,Both"), "set_v_grow_direction", "get_v_grow_direction");
 
 	ADD_GROUP("Rect", "rect_");
 	ADD_PROPERTYNZ(PropertyInfo(Variant::VECTOR2, "rect_position", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR), "set_position", "get_position");
@@ -2886,6 +2920,8 @@ void Control::_bind_methods() {
 	BIND_CONSTANT(NOTIFICATION_FOCUS_EXIT);
 	BIND_CONSTANT(NOTIFICATION_THEME_CHANGED);
 	BIND_CONSTANT(NOTIFICATION_MODAL_CLOSE);
+	BIND_CONSTANT(NOTIFICATION_SCROLL_BEGIN);
+	BIND_CONSTANT(NOTIFICATION_SCROLL_END);
 
 	BIND_ENUM_CONSTANT(CURSOR_ARROW);
 	BIND_ENUM_CONSTANT(CURSOR_IBEAM);
@@ -2939,6 +2975,7 @@ void Control::_bind_methods() {
 
 	BIND_ENUM_CONSTANT(GROW_DIRECTION_BEGIN);
 	BIND_ENUM_CONSTANT(GROW_DIRECTION_END);
+	BIND_ENUM_CONSTANT(GROW_DIRECTION_BOTH);
 
 	BIND_ENUM_CONSTANT(ANCHOR_BEGIN);
 	BIND_ENUM_CONSTANT(ANCHOR_END);
@@ -2972,7 +3009,6 @@ Control::Control() {
 	data.h_size_flags = SIZE_FILL;
 	data.v_size_flags = SIZE_FILL;
 	data.expand = 1;
-	data.pending_min_size_update = false;
 	data.rotation = 0;
 	data.parent_canvas_item = NULL;
 	data.scale = Vector2(1, 1);
@@ -2982,6 +3018,8 @@ Control::Control() {
 	data.disable_visibility_clip = false;
 	data.h_grow = GROW_DIRECTION_END;
 	data.v_grow = GROW_DIRECTION_END;
+	data.minimum_size_valid = false;
+	data.updating_last_minimum_size = false;
 
 	data.clip_contents = false;
 	for (int i = 0; i < 4; i++) {

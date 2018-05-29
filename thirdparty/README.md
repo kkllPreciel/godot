@@ -89,7 +89,7 @@ Use UI font variant if available, because it has tight vertical metrics and good
 ### Hack Regular
 
 - Upstream: https://github.com/source-foundry/Hack
-- Version: 3.000
+- Version: 3.003
 - License: MIT + Bitstream Vera License
 
 ### DroidSans*.ttf
@@ -102,7 +102,7 @@ Use UI font variant if available, because it has tight vertical metrics and good
 ## freetype
 
 - Upstream: https://www.freetype.org
-- Version: 2.8.1
+- Version: 2.9.1
 - License: FreeType License (BSD-like)
 
 Files extracted from upstream source:
@@ -115,7 +115,7 @@ Files extracted from upstream source:
 ## glad
 
 - Upstream: https://github.com/Dav1dde/glad
-- Version: 0.1.16a0
+- Version: 0.1.20a0
 - License: MIT
 
 The files we package are automatically generated.
@@ -191,7 +191,7 @@ Files extracted from upstream source:
 ## libvorbis
 
 - Upstream: https://www.xiph.org/vorbis
-- Version: 1.3.5
+- Version: 1.3.6
 - License: BSD-3-Clause
 
 Files extracted from upstream source:
@@ -218,7 +218,7 @@ Godot-made change marked with `// -- GODOT --` comments.
 ## libwebp
 
 - Upstream: https://chromium.googlesource.com/webm/libwebp/
-- Version: 0.6.1
+- Version: 1.0.0
 - License: BSD-3-Clause
 
 Files extracted from upstream source:
@@ -234,36 +234,40 @@ changes are marked with `// -- GODOT --` comments.
 ## libwebsockets
 
 - Upstream: https://github.com/warmcat/libwebsockets
-- Version: 2.4.1
+- Version: 2.4.2
 - License: LGPLv2.1 + static linking exception
 
 File extracted from upstream source:
 - Everything in `lib/` except `minilex.c`, `http2/`, `event-libs/`.
   - From `misc/` exclude `lws-genhash.c`, `lws-ring.c`, `romfs.{c,h}`, `smtp.c`.
   - From `plat/` exclude `lws-plat-{esp*,optee}.c`.
-  - From `server/` exclude `access-log.c`, `cgi.c`, `daemonize.c`, `lws-spa.c`, 
+  - From `server/` exclude `access-log.c`, `cgi.c`, `daemonize.c`, `lws-spa.c`,
 `peer-limits.c`, `rewrite.c`
 - Also copy `win32helpers/` from `win32port/`
 - `mbedtls_wrapper/include/platform/ssl_port.h` has a small change to check for OSX and FreeBSD (missing `malloc.h`).
   The bug is fixed in upstream master via `LWS_HAVE_MALLOC_H`, but not in the 2.4.1 branch (as the file structure has changed).
+- You might need to apply the patch in `thirdparty/lws/mbedtls_verify.diff` (port of PR 1215) to future `2.4.x` releases if it does not get cherry picked.
 
-Important: `lws_config.h` and `lws_config_private.h` contains custom 
+Important: `lws_config.h` and `lws_config_private.h` contains custom
 Godot build configurations, check them out when updating.
 
 ## mbedTLS
 
 - Upstream: https://tls.mbed.org/
-- Version: 2.7.0
+- Version: 2.8.0
 - License: Apache 2.0
 
-File extracted from upstream release tarball `mbedtls-2.7.0-apache.tgz`:
-- All `*.h` from `include/mbedtls/` to `thirdparty/include/mbedtls/`
-- All `*.c` from `library/` to `thirdparty/library/`
+File extracted from upstream release tarball `mbedtls-2.8.0-apache.tgz`:
+- All `*.h` from `include/mbedtls/` to `thirdparty/mbedtls/include/mbedtls/`
+- All `*.c` from `library/` to `thirdparty/mbedtls/library/`
+- In file `thirdparty/mbedtls/library/net_sockets.c` mbedTLS overrides the `_WIN32_WINNT` define.
+  Be sure to check the Godot addition to only redfine it when undefined or `< 0x0501` (PRed upstream).
+- Applied the patch in `thirdparty/mbedtls/1453.diff` (PR 1453). Soon to be merged upstream. Check it out at next update.
 
 ## minizip
 
 - Upstream: http://www.zlib.net
-- Version: 1.2.4 (zlib contrib)
+- Version: 1.2.11 (zlib contrib)
 - License: zlib
 
 Files extracted from the upstream source:
@@ -338,11 +342,11 @@ Collection of single-file libraries used in Godot components.
   * License: zlib
 - `stb_truetype.h`
   * Upstream: https://github.com/nothings/stb
-  * Version: 1.17
+  * Version: 1.19
   * License: Public Domain (Unlicense) or MIT
 - `stb_vorbis.c`
   * Upstream: https://github.com/nothings/stb
-  * Version: 1.11
+  * Version: 1.14
   * License: Public Domain (Unlicense) or MIT
 
 
@@ -476,7 +480,7 @@ Files extracted from upstream source:
 ## zstd
 
 - Upstream: https://github.com/facebook/zstd
-- Version: 1.3.3
+- Version: 1.3.4
 - License: BSD-3-Clause
 
 Files extracted from upstream source:

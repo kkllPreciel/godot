@@ -2,6 +2,8 @@
 
 Import('env')
 
+import methods
+
 env.core_sources = []
 
 
@@ -18,9 +20,8 @@ gd_cpp = '#include "project_settings.h"\n'
 gd_cpp += gd_inc
 gd_cpp += "void ProjectSettings::register_global_defaults() {\n" + gd_call + "\n}\n"
 
-f = open("global_defaults.gen.cpp", "w")
-f.write(gd_cpp)
-f.close()
+with open("global_defaults.gen.cpp", "w") as f:
+	f.write(gd_cpp)
 
 
 # Generate AES256 script encryption key
@@ -47,9 +48,8 @@ if ("SCRIPT_AES256_ENCRYPTION_KEY" in os.environ):
         txt = "0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0"
         print("Invalid AES256 encryption key, not 64 bits hex: " + e)
 
-f = open("script_encryption_key.gen.cpp", "w")
-f.write("#include \"project_settings.h\"\nuint8_t script_encryption_key[32]={" + txt + "};\n")
-f.close()
+with open("script_encryption_key.gen.cpp", "w") as f:
+	f.write("#include \"project_settings.h\"\nuint8_t script_encryption_key[32]={" + txt + "};\n")
 
 
 # Add required thirdparty code. Header paths are hardcoded, we don't need to append
@@ -68,7 +68,6 @@ thirdparty_sources = [
 	"md5.cpp",
 	"pcg.cpp",
 	"triangulator.cpp",
-	"clipper.cpp",
 ]
 thirdparty_sources = [thirdparty_dir + file for file in thirdparty_sources]
 env.add_source_files(env.core_sources, thirdparty_sources)
@@ -96,6 +95,17 @@ env.add_source_files(env.core_sources, "*.cpp")
 import make_binders
 env.Command(['method_bind.gen.inc', 'method_bind_ext.gen.inc'], 'make_binders.py', make_binders.run)
 
+# Authors
+env.Depends('#core/authors.gen.h', "../AUTHORS.md")
+env.Command('#core/authors.gen.h', "../AUTHORS.md", methods.make_authors_header)
+
+# Donors
+env.Depends('#core/donors.gen.h', "../DONORS.md")
+env.Command('#core/donors.gen.h', "../DONORS.md", methods.make_donors_header)
+
+# License
+env.Depends('#core/license.gen.h', ["../COPYRIGHT.txt", "../LICENSE.txt"])
+env.Command('#core/license.gen.h', ["../COPYRIGHT.txt", "../LICENSE.txt"], methods.make_license_header)
 
 # Chain load SCsubs
 SConscript('os/SCsub')
