@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -31,32 +31,34 @@
 #ifndef BINDINGS_GENERATOR_H
 #define BINDINGS_GENERATOR_H
 
-#include "class_db.h"
+#include "core/class_db.h"
+#include "core/string_builder.h"
 #include "editor/doc/doc_data.h"
 #include "editor/editor_help.h"
 
-#ifdef DEBUG_METHODS_ENABLED
+#if defined(DEBUG_METHODS_ENABLED) && defined(TOOLS_ENABLED)
 
-#include "ustring.h"
+#include "core/ustring.h"
 
 class BindingsGenerator {
 
 	struct ConstantInterface {
 		String name;
+		String proxy_name;
 		int value;
 		const DocData::ConstantDoc *const_doc;
 
 		ConstantInterface() {}
 
-		ConstantInterface(const String &p_name, int p_value) {
+		ConstantInterface(const String &p_name, const String &p_proxy_name, int p_value) {
 			name = p_name;
+			proxy_name = p_proxy_name;
 			value = p_value;
 		}
 	};
 
 	struct EnumInterface {
 		StringName cname;
-		String prefix;
 		List<ConstantInterface> constants;
 
 		_FORCE_INLINE_ bool operator==(const EnumInterface &p_ienum) const {
@@ -85,8 +87,13 @@ class BindingsGenerator {
 		StringName cname;
 		bool is_enum;
 
-		TypeReference() {
-			is_enum = false;
+		TypeReference() :
+				is_enum(false) {
+		}
+
+		TypeReference(const StringName &p_cname) :
+				cname(p_cname),
+				is_enum(false) {
 		}
 	};
 
@@ -140,7 +147,7 @@ class BindingsGenerator {
 		bool requires_object_call;
 
 		/**
-		 * Determines if the method visibility is `internal` (visible only to files in the same assembly).
+		 * Determines if the method visibility is 'internal' (visible only to files in the same assembly).
 		 * Currently, we only use this for methods that are not meant to be exposed,
 		 * but are required by properties as getters or setters.
 		 * Methods that are not meant to be exposed are those that begin with underscore and are not virtual.
@@ -151,17 +158,20 @@ class BindingsGenerator {
 
 		const DocData::MethodDoc *method_doc;
 
+		bool is_deprecated;
+		String deprecation_message;
+
 		void add_argument(const ArgumentInterface &argument) {
 			arguments.push_back(argument);
 		}
 
 		MethodInterface() {
-			return_type.cname = BindingsGenerator::get_singleton()->name_cache.type_void;
 			is_vararg = false;
 			is_virtual = false;
 			requires_object_call = false;
 			is_internal = false;
 			method_doc = NULL;
+			is_deprecated = false;
 		}
 	};
 
@@ -192,7 +202,7 @@ class BindingsGenerator {
 
 		/**
 		 * Used only by Object-derived types.
-		 * Determines if this type is not virtual (incomplete).
+		 * Determines if this type is not abstract (incomplete).
 		 * e.g.: CanvasItem cannot be instantiated.
 		 */
 		bool is_instantiable;
@@ -205,10 +215,12 @@ class BindingsGenerator {
 		bool memory_own;
 
 		/**
-		 * Determines if the file must have a using directive for System.Collections.Generic
-		 * e.g.: When the generated class makes use of Dictionary
+		 * This must be set to true for any struct bigger than 32-bits. Those cannot be passed/returned by value
+		 * with internal calls, so we must use pointers instead. Returns must be replace with out parameters.
+		 * In this case, [c_out] and [cs_out] must have a different format, explained below.
+		 * The Mono IL interpreter icall trampolines don't support passing structs bigger than 32-bits by value (at least not on WASM).
 		 */
-		bool requires_collections;
+		bool ret_as_byref_arg;
 
 		// !! The comments of the following fields make reference to other fields via square brackets, e.g.: [field_name]
 		// !! When renaming those fields, make sure to rename their references in the comments
@@ -229,7 +241,7 @@ class BindingsGenerator {
 		String c_in;
 
 		/**
-		 * Determines the name of the variable that will be passed as argument to a ptrcall.
+		 * Determines the expression that will be passed as argument to ptrcall.
 		 * By default the value equals the name of the parameter,
 		 * this varies for types that require special manipulation via [c_in].
 		 * Formatting elements:
@@ -244,6 +256,14 @@ class BindingsGenerator {
 		 * %0: [c_type_out] of the return type
 		 * %1: name of the variable to be returned
 		 * %2: [name] of the return type
+		 * ---------------------------------------
+		 * If [ret_as_byref_arg] is true, the format is different. Instead of using a return statement,
+		 * the value must be assigned to a parameter. This type of this parameter is a pointer to [c_type_out].
+		 * Formatting elements:
+		 * %0: [c_type_out] of the return type
+		 * %1: name of the variable to be returned
+		 * %2: [name] of the return type
+		 * %3: name of the parameter that must be assigned the return value
 		 */
 		String c_out;
 
@@ -287,15 +307,16 @@ class BindingsGenerator {
 		 * One or more statements that determine how a variable of this type is returned from a method.
 		 * It must contain the return statement(s).
 		 * Formatting elements:
-		 * %0: internal method call statement
-		 * %1: [cs_type] of the return type
-		 * %2: [im_type_out] of the return type
+		 * %0: internal method name
+		 * %1: internal method call arguments without surrounding parenthesis
+		 * %2: [cs_type] of the return type
+		 * %3: [im_type_out] of the return type
 		 */
 		String cs_out;
 
 		/**
 		 * Type used for method signatures, both for parameters and the return type.
-		 * Same as [proxy_name] except for variable arguments (VarArg).
+		 * Same as [proxy_name] except for variable arguments (VarArg) and collections (which include the namespace).
 		 */
 		String cs_type;
 
@@ -325,6 +346,15 @@ class BindingsGenerator {
 			return NULL;
 		}
 
+		const PropertyInterface *find_property_by_name(const StringName &p_cname) const {
+			for (const List<PropertyInterface>::Element *E = properties.front(); E; E = E->next()) {
+				if (E->get().cname == p_cname)
+					return &E->get();
+			}
+
+			return NULL;
+		}
+
 		const PropertyInterface *find_property_by_proxy_name(const String &p_proxy_name) const {
 			for (const List<PropertyInterface>::Element *E = properties.front(); E; E = E->next()) {
 				if (E->get().proxy_name == p_proxy_name)
@@ -339,8 +369,6 @@ class BindingsGenerator {
 			itype.proxy_name = itype.name;
 
 			itype.c_type = itype.name;
-			itype.c_type_in = "void*";
-			itype.c_type_out = "MonoObject*";
 			itype.cs_type = itype.proxy_name;
 			itype.im_type_in = "ref " + itype.proxy_name;
 			itype.im_type_out = itype.proxy_name;
@@ -391,13 +419,22 @@ class BindingsGenerator {
 		}
 
 		static void postsetup_enum_type(TypeInterface &r_enum_itype) {
-			r_enum_itype.c_arg_in = "&%s";
-			r_enum_itype.c_type = "int";
-			r_enum_itype.c_type_in = "int";
-			r_enum_itype.c_type_out = "int";
+			// C interface for enums is the same as that of 'uint32_t'. Remember to apply
+			// any of the changes done here to the 'uint32_t' type interface as well.
+
+			r_enum_itype.c_arg_in = "&%s_in";
+			{
+				// The expected types for parameters and return value in ptrcall are 'int64_t' or 'uint64_t'.
+				r_enum_itype.c_in = "\t%0 %1_in = (%0)%1;\n";
+				r_enum_itype.c_out = "\treturn (%0)%1;\n";
+				r_enum_itype.c_type = "int64_t";
+			}
+			r_enum_itype.c_type_in = "int32_t";
+			r_enum_itype.c_type_out = r_enum_itype.c_type_in;
+
 			r_enum_itype.cs_type = r_enum_itype.proxy_name;
 			r_enum_itype.cs_in = "(int)%s";
-			r_enum_itype.cs_out = "return (%1)%0;";
+			r_enum_itype.cs_out = "return (%2)%0(%1);";
 			r_enum_itype.im_type_in = "int";
 			r_enum_itype.im_type_out = "int";
 			r_enum_itype.class_doc = &EditorHelp::get_doc_data()->class_list[r_enum_itype.proxy_name];
@@ -414,7 +451,8 @@ class BindingsGenerator {
 			is_instantiable = false;
 
 			memory_own = false;
-			requires_collections = false;
+
+			ret_as_byref_arg = false;
 
 			c_arg_in = "%s";
 
@@ -452,7 +490,8 @@ class BindingsGenerator {
 		}
 	};
 
-	static bool verbose_output;
+	bool log_print_enabled;
+	bool initialized;
 
 	OrderedHashMap<StringName, TypeInterface> obj_types;
 
@@ -463,10 +502,7 @@ class BindingsGenerator {
 	List<EnumInterface> global_enums;
 	List<ConstantInterface> global_constants;
 
-	Map<StringName, String> extra_members;
-
 	List<InternalCall> method_icalls;
-	List<InternalCall> builtin_method_icalls;
 	Map<const MethodInterface *, const InternalCall *> method_icalls_map;
 
 	List<const InternalCall *> generated_icall_funcs;
@@ -474,29 +510,60 @@ class BindingsGenerator {
 	List<InternalCall> core_custom_icalls;
 	List<InternalCall> editor_custom_icalls;
 
+	Map<StringName, List<StringName> > blacklisted_methods;
+
+	void _initialize_blacklisted_methods();
+
 	struct NameCache {
 		StringName type_void;
-		StringName type_int;
 		StringName type_Array;
 		StringName type_Dictionary;
 		StringName type_Variant;
 		StringName type_VarArg;
 		StringName type_Object;
 		StringName type_Reference;
+		StringName type_RID;
+		StringName type_String;
+		StringName type_at_GlobalScope;
 		StringName enum_Error;
+
+		StringName type_sbyte;
+		StringName type_short;
+		StringName type_int;
+		StringName type_long;
+		StringName type_byte;
+		StringName type_ushort;
+		StringName type_uint;
+		StringName type_ulong;
+		StringName type_float;
+		StringName type_double;
 
 		NameCache() {
 			type_void = StaticCString::create("void");
-			type_int = StaticCString::create("int");
 			type_Array = StaticCString::create("Array");
 			type_Dictionary = StaticCString::create("Dictionary");
 			type_Variant = StaticCString::create("Variant");
 			type_VarArg = StaticCString::create("VarArg");
 			type_Object = StaticCString::create("Object");
 			type_Reference = StaticCString::create("Reference");
+			type_RID = StaticCString::create("RID");
+			type_String = StaticCString::create("String");
+			type_at_GlobalScope = StaticCString::create("@GlobalScope");
 			enum_Error = StaticCString::create("Error");
+
+			type_sbyte = StaticCString::create("sbyte");
+			type_short = StaticCString::create("short");
+			type_int = StaticCString::create("int");
+			type_long = StaticCString::create("long");
+			type_byte = StaticCString::create("byte");
+			type_ushort = StaticCString::create("ushort");
+			type_uint = StaticCString::create("uint");
+			type_ulong = StaticCString::create("ulong");
+			type_float = StaticCString::create("float");
+			type_double = StaticCString::create("double");
 		}
 
+	private:
 		NameCache(const NameCache &);
 		NameCache &operator=(const NameCache &);
 	};
@@ -512,6 +579,15 @@ class BindingsGenerator {
 		return NULL;
 	}
 
+	const ConstantInterface *find_constant_by_name(const String &p_name, const List<ConstantInterface> &p_constants) const {
+		for (const List<ConstantInterface>::Element *E = p_constants.front(); E; E = E->next()) {
+			if (E->get().name == p_name)
+				return &E->get();
+		}
+
+		return NULL;
+	}
+
 	inline String get_unique_sig(const TypeInterface &p_type) {
 		if (p_type.is_reference)
 			return "Ref";
@@ -523,60 +599,61 @@ class BindingsGenerator {
 		return p_type.name;
 	}
 
-	String _determine_enum_prefix(const EnumInterface &p_ienum);
+	String bbcode_to_xml(const String &p_bbcode, const TypeInterface *p_itype);
 
-	void _generate_header_icalls();
+	int _determine_enum_prefix(const EnumInterface &p_ienum);
+	void _apply_prefix_to_enum_constants(EnumInterface &p_ienum, int p_prefix_length);
+
 	void _generate_method_icalls(const TypeInterface &p_itype);
 
 	const TypeInterface *_get_type_or_null(const TypeReference &p_typeref);
 	const TypeInterface *_get_type_or_placeholder(const TypeReference &p_typeref);
 
-	void _default_argument_from_variant(const Variant &p_val, ArgumentInterface &r_iarg);
-	void _populate_builtin_type(TypeInterface &r_itype, Variant::Type vtype);
+	StringName _get_int_type_name_from_meta(GodotTypeInfo::Metadata p_meta);
+	StringName _get_float_type_name_from_meta(GodotTypeInfo::Metadata p_meta);
 
-	void _populate_object_type_interfaces();
+	bool _arg_default_value_from_variant(const Variant &p_val, ArgumentInterface &r_iarg);
+
+	bool _populate_object_type_interfaces();
 	void _populate_builtin_type_interfaces();
 
 	void _populate_global_constants();
 
 	Error _generate_cs_type(const TypeInterface &itype, const String &p_output_file);
 
-	Error _generate_cs_property(const TypeInterface &p_itype, const PropertyInterface &p_iprop, List<String> &p_output);
-	Error _generate_cs_method(const TypeInterface &p_itype, const MethodInterface &p_imethod, int &p_method_bind_count, List<String> &p_output);
+	Error _generate_cs_property(const TypeInterface &p_itype, const PropertyInterface &p_iprop, StringBuilder &p_output);
+	Error _generate_cs_method(const TypeInterface &p_itype, const MethodInterface &p_imethod, int &p_method_bind_count, StringBuilder &p_output);
 
-	void _generate_global_constants(List<String> &p_output);
+	void _generate_global_constants(StringBuilder &p_output);
 
-	Error _generate_glue_method(const TypeInterface &p_itype, const MethodInterface &p_imethod, List<String> &p_output);
+	Error _generate_glue_method(const TypeInterface &p_itype, const MethodInterface &p_imethod, StringBuilder &p_output);
 
-	Error _save_file(const String &p_path, const List<String> &p_content);
+	Error _save_file(const String &p_path, const StringBuilder &p_content);
 
-	BindingsGenerator() {}
+	void _log(const char *p_format, ...) _PRINTF_FORMAT_ATTRIBUTE_2_3;
 
-	BindingsGenerator(const BindingsGenerator &);
-	BindingsGenerator &operator=(const BindingsGenerator &);
-
-	friend class CSharpLanguage;
-	static BindingsGenerator *singleton;
+	void _initialize();
 
 public:
-	Error generate_cs_core_project(const String &p_output_dir, bool p_verbose_output = true);
-	Error generate_cs_editor_project(const String &p_output_dir, const String &p_core_dll_path, bool p_verbose_output = true);
+	Error generate_cs_core_project(const String &p_proj_dir);
+	Error generate_cs_editor_project(const String &p_proj_dir);
+	Error generate_cs_api(const String &p_output_dir);
 	Error generate_glue(const String &p_output_dir);
 
+	_FORCE_INLINE_ bool is_log_print_enabled() { return log_print_enabled; }
+	_FORCE_INLINE_ void set_log_print_enabled(bool p_enabled) { log_print_enabled = p_enabled; }
+
+	_FORCE_INLINE_ bool is_initialized() { return initialized; }
+
 	static uint32_t get_version();
-	static uint32_t get_cs_glue_version();
-
-	void initialize();
-
-	_FORCE_INLINE_ static BindingsGenerator *get_singleton() {
-		if (!singleton) {
-			singleton = memnew(BindingsGenerator);
-			singleton->initialize();
-		}
-		return singleton;
-	}
 
 	static void handle_cmdline_args(const List<String> &p_cmdline_args);
+
+	BindingsGenerator() :
+			log_print_enabled(true),
+			initialized(false) {
+		_initialize();
+	}
 };
 
 #endif

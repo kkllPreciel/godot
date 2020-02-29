@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -34,10 +34,6 @@
 #include "scene/main/node.h"
 #include "scene/main/scene_tree.h"
 
-/**
-	@author Juan Linietsky <reduzio@gmail.com>
-*/
-
 class SpatialGizmo : public Reference {
 
 	GDCLASS(SpatialGizmo, Reference);
@@ -48,9 +44,9 @@ public:
 	virtual void clear() = 0;
 	virtual void redraw() = 0;
 	virtual void free() = 0;
-	virtual bool can_draw() const = 0;
 
 	SpatialGizmo();
+	virtual ~SpatialGizmo() {}
 };
 
 class Spatial : public Node {
@@ -92,6 +88,7 @@ class Spatial : public Node {
 		bool notify_transform;
 
 		bool visible;
+		bool disable_scale;
 
 #ifdef TOOLS_ENABLED
 		Ref<SpatialGizmo> gizmo;
@@ -153,6 +150,9 @@ public:
 	void set_as_toplevel(bool p_enabled);
 	bool is_set_as_toplevel() const;
 
+	void set_disable_scale(bool p_enabled);
+	bool is_scale_disabled() const;
+
 	void set_disable_gizmo(bool p_enabled);
 	void update_gizmo();
 	void set_gizmo(const Ref<SpatialGizmo> &p_gizmo);
@@ -197,6 +197,8 @@ public:
 	void show();
 	void hide();
 	bool is_visible_in_tree() const;
+
+	void force_update_transform();
 
 	Spatial();
 	~Spatial();

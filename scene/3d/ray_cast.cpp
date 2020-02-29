@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -31,7 +31,7 @@
 #include "ray_cast.h"
 
 #include "collision_object.h"
-#include "engine.h"
+#include "core/engine.h"
 #include "mesh_instance.h"
 #include "servers/physics_server.h"
 
@@ -80,7 +80,7 @@ bool RayCast::is_colliding() const {
 }
 Object *RayCast::get_collider() const {
 
-	if (against == 0)
+	if (against.is_null())
 		return NULL;
 
 	return ObjectDB::get_instance(against);
@@ -102,6 +102,8 @@ Vector3 RayCast::get_collision_normal() const {
 void RayCast::set_enabled(bool p_enabled) {
 
 	enabled = p_enabled;
+	update_gizmo();
+
 	if (is_inside_tree() && !Engine::get_singleton()->is_editor_hint())
 		set_physics_process_internal(p_enabled);
 	if (!p_enabled)
@@ -184,7 +186,7 @@ void RayCast::_notification(int p_what) {
 			_update_raycast_state();
 			if (prev_collision_state != collided && get_tree()->is_debugging_collisions_hint()) {
 				if (debug_material.is_valid()) {
-					Ref<SpatialMaterial> line_material = static_cast<Ref<SpatialMaterial> >(debug_material);
+					Ref<StandardMaterial3D> line_material = static_cast<Ref<StandardMaterial3D> >(debug_material);
 					line_material->set_albedo(collided ? Color(1.0, 0, 0) : Color(1.0, 0.8, 0.6));
 				}
 			}
@@ -208,7 +210,7 @@ void RayCast::_update_raycast_state() {
 
 	PhysicsDirectSpaceState::RayResult rr;
 
-	if (dss->intersect_ray(gt.get_origin(), gt.xform(to), rr, exclude, collision_mask)) {
+	if (dss->intersect_ray(gt.get_origin(), gt.xform(to), rr, exclude, collision_mask, collide_with_bodies, collide_with_areas)) {
 
 		collided = true;
 		against = rr.collider_id;
@@ -217,7 +219,7 @@ void RayCast::_update_raycast_state() {
 		against_shape = rr.shape;
 	} else {
 		collided = false;
-		against = 0;
+		against = ObjectID();
 		against_shape = 0;
 	}
 }
@@ -259,6 +261,26 @@ void RayCast::clear_exceptions() {
 	exclude.clear();
 }
 
+void RayCast::set_collide_with_areas(bool p_clip) {
+
+	collide_with_areas = p_clip;
+}
+
+bool RayCast::is_collide_with_areas_enabled() const {
+
+	return collide_with_areas;
+}
+
+void RayCast::set_collide_with_bodies(bool p_clip) {
+
+	collide_with_bodies = p_clip;
+}
+
+bool RayCast::is_collide_with_bodies_enabled() const {
+
+	return collide_with_bodies;
+}
+
 void RayCast::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("set_enabled", "enabled"), &RayCast::set_enabled);
@@ -292,20 +314,29 @@ void RayCast::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_exclude_parent_body", "mask"), &RayCast::set_exclude_parent_body);
 	ClassDB::bind_method(D_METHOD("get_exclude_parent_body"), &RayCast::get_exclude_parent_body);
 
+	ClassDB::bind_method(D_METHOD("set_collide_with_areas", "enable"), &RayCast::set_collide_with_areas);
+	ClassDB::bind_method(D_METHOD("is_collide_with_areas_enabled"), &RayCast::is_collide_with_areas_enabled);
+
+	ClassDB::bind_method(D_METHOD("set_collide_with_bodies", "enable"), &RayCast::set_collide_with_bodies);
+	ClassDB::bind_method(D_METHOD("is_collide_with_bodies_enabled"), &RayCast::is_collide_with_bodies_enabled);
+
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "enabled"), "set_enabled", "is_enabled");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "exclude_parent"), "set_exclude_parent_body", "get_exclude_parent_body");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "cast_to"), "set_cast_to", "get_cast_to");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "collision_mask", PROPERTY_HINT_LAYERS_3D_PHYSICS), "set_collision_mask", "get_collision_mask");
+
+	ADD_GROUP("Collide With", "collide_with");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "collide_with_areas", PROPERTY_HINT_LAYERS_3D_PHYSICS), "set_collide_with_areas", "is_collide_with_areas_enabled");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "collide_with_bodies", PROPERTY_HINT_LAYERS_3D_PHYSICS), "set_collide_with_bodies", "is_collide_with_bodies_enabled");
 }
 
 void RayCast::_create_debug_shape() {
 
 	if (!debug_material.is_valid()) {
-		debug_material = Ref<SpatialMaterial>(memnew(SpatialMaterial));
+		debug_material = Ref<StandardMaterial3D>(memnew(StandardMaterial3D));
 
-		Ref<SpatialMaterial> line_material = static_cast<Ref<SpatialMaterial> >(debug_material);
-		line_material->set_flag(SpatialMaterial::FLAG_UNSHADED, true);
-		line_material->set_line_width(3.0);
+		Ref<StandardMaterial3D> line_material = static_cast<Ref<StandardMaterial3D> >(debug_material);
+		line_material->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
 		line_material->set_albedo(Color(1.0, 0.8, 0.6));
 	}
 
@@ -331,8 +362,7 @@ void RayCast::_update_debug_shape() {
 		return;
 
 	Ref<ArrayMesh> mesh = mi->get_mesh();
-	if (mesh->get_surface_count() > 0)
-		mesh->surface_remove(0);
+	mesh->clear_surfaces();
 
 	Array a;
 	a.resize(Mesh::ARRAY_MAX);
@@ -363,11 +393,13 @@ void RayCast::_clear_debug_shape() {
 RayCast::RayCast() {
 
 	enabled = false;
-	against = 0;
+
 	collided = false;
 	against_shape = 0;
 	collision_mask = 1;
 	cast_to = Vector3(0, -1, 0);
 	debug_shape = NULL;
 	exclude_parent_body = true;
+	collide_with_areas = false;
+	collide_with_bodies = true;
 }

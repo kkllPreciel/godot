@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -31,7 +31,7 @@
 #ifndef PERFORMANCE_H
 #define PERFORMANCE_H
 
-#include "object.h"
+#include "core/object.h"
 
 #define PERF_WARN_OFFLINE_FUNCTION
 #define PERF_WARN_PROCESS_SYNC
@@ -43,6 +43,8 @@ class Performance : public Object {
 	static Performance *singleton;
 	static void _bind_methods();
 
+	float _get_node_count() const;
+
 	float _process_time;
 	float _physics_process_time;
 
@@ -53,13 +55,12 @@ public:
 		TIME_PROCESS,
 		TIME_PHYSICS_PROCESS,
 		MEMORY_STATIC,
-		MEMORY_DYNAMIC,
 		MEMORY_STATIC_MAX,
-		MEMORY_DYNAMIC_MAX,
 		MEMORY_MESSAGE_BUFFER_MAX,
 		OBJECT_COUNT,
 		OBJECT_RESOURCE_COUNT,
 		OBJECT_NODE_COUNT,
+		OBJECT_ORPHAN_NODE_COUNT,
 		RENDER_OBJECTS_IN_FRAME,
 		RENDER_VERTICES_IN_FRAME,
 		RENDER_MATERIAL_CHANGES_IN_FRAME,
@@ -77,6 +78,7 @@ public:
 		PHYSICS_3D_COLLISION_PAIRS,
 		PHYSICS_3D_ISLAND_COUNT,
 		//physics
+		AUDIO_OUTPUT_LATENCY,
 		MONITOR_MAX
 	};
 

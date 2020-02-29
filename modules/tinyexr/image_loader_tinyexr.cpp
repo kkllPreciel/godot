@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -30,19 +30,19 @@
 
 #include "image_loader_tinyexr.h"
 
-#include "os/os.h"
-#include "print_string.h"
+#include "core/os/os.h"
+#include "core/print_string.h"
 
 #include "thirdparty/tinyexr/tinyexr.h"
 
 Error ImageLoaderTinyEXR::load_image(Ref<Image> p_image, FileAccess *f, bool p_force_linear, float p_scale) {
 
-	PoolVector<uint8_t> src_image;
+	Vector<uint8_t> src_image;
 	int src_image_len = f->get_len();
 	ERR_FAIL_COND_V(src_image_len == 0, ERR_FILE_CORRUPT);
 	src_image.resize(src_image_len);
 
-	PoolVector<uint8_t>::Write w = src_image.write();
+	uint8_t *w = src_image.ptrw();
 
 	f->get_buffer(&w[0], src_image_len);
 
@@ -60,16 +60,16 @@ Error ImageLoaderTinyEXR::load_image(Ref<Image> p_image, FileAccess *f, bool p_f
 
 	InitEXRHeader(&exr_header);
 
-	int ret = ParseEXRVersionFromMemory(&exr_version, w.ptr(), src_image_len);
+	int ret = ParseEXRVersionFromMemory(&exr_version, w, src_image_len);
 	if (ret != TINYEXR_SUCCESS) {
 
 		return ERR_FILE_CORRUPT;
 	}
 
-	ret = ParseEXRHeaderFromMemory(&exr_header, &exr_version, w.ptr(), src_image_len, &err);
+	ret = ParseEXRHeaderFromMemory(&exr_header, &exr_version, w, src_image_len, &err);
 	if (ret != TINYEXR_SUCCESS) {
 		if (err) {
-			ERR_PRINTS(String(err));
+			ERR_PRINT(String(err));
 		}
 		return ERR_FILE_CORRUPT;
 	}
@@ -82,10 +82,10 @@ Error ImageLoaderTinyEXR::load_image(Ref<Image> p_image, FileAccess *f, bool p_f
 	}
 
 	InitEXRImage(&exr_image);
-	ret = LoadEXRImageFromMemory(&exr_image, &exr_header, w.ptr(), src_image_len, &err);
+	ret = LoadEXRImageFromMemory(&exr_image, &exr_header, w, src_image_len, &err);
 	if (ret != TINYEXR_SUCCESS) {
 		if (err) {
-			ERR_PRINTS(String(err));
+			ERR_PRINT(String(err));
 		}
 		return ERR_FILE_CORRUPT;
 	}
@@ -107,67 +107,133 @@ Error ImageLoaderTinyEXR::load_image(Ref<Image> p_image, FileAccess *f, bool p_f
 		}
 	}
 
-	if (idxR == -1) {
-		ERR_PRINT("TinyEXR: R channel not found.");
-		// @todo { free exr_image }
-		return ERR_FILE_CORRUPT;
-	}
+	if (exr_header.num_channels == 1) {
+		// Grayscale channel only.
+		idxR = 0;
+		idxG = 0;
+		idxB = 0;
+		idxA = 0;
+	} else {
+		// Assume RGB(A)
+		if (idxR == -1) {
+			ERR_PRINT("TinyEXR: R channel not found.");
+			// @todo { free exr_image }
+			return ERR_FILE_CORRUPT;
+		}
 
-	if (idxG == -1) {
-		ERR_PRINT("TinyEXR: G channel not found.")
-		// @todo { free exr_image }
-		return ERR_FILE_CORRUPT;
-	}
+		if (idxG == -1) {
+			ERR_PRINT("TinyEXR: G channel not found.");
+			// @todo { free exr_image }
+			return ERR_FILE_CORRUPT;
+		}
 
-	if (idxB == -1) {
-		ERR_PRINT("TinyEXR: B channel not found.")
-		// @todo { free exr_image }
-		return ERR_FILE_CORRUPT;
+		if (idxB == -1) {
+			ERR_PRINT("TinyEXR: B channel not found.");
+			// @todo { free exr_image }
+			return ERR_FILE_CORRUPT;
+		}
 	}
 
 	// EXR image data loaded, now parse it into Godot-friendly image data
 
-	PoolVector<uint8_t> imgdata;
+	Vector<uint8_t> imgdata;
 	Image::Format format;
+	int output_channels = 0;
 
-	if (idxA > 0) {
+	if (idxA != -1) {
 
 		imgdata.resize(exr_image.width * exr_image.height * 8); //RGBA16
 		format = Image::FORMAT_RGBAH;
+		output_channels = 4;
 	} else {
 
 		imgdata.resize(exr_image.width * exr_image.height * 6); //RGB16
 		format = Image::FORMAT_RGBH;
+		output_channels = 3;
+	}
+
+	EXRTile single_image_tile;
+	int num_tiles;
+	int tile_width = 0;
+	int tile_height = 0;
+
+	const EXRTile *exr_tiles;
+
+	if (!exr_header.tiled) {
+		single_image_tile.images = exr_image.images;
+		single_image_tile.width = exr_image.width;
+		single_image_tile.height = exr_image.height;
+		single_image_tile.level_x = exr_image.width;
+		single_image_tile.level_y = exr_image.height;
+		single_image_tile.offset_x = 0;
+		single_image_tile.offset_y = 0;
+
+		exr_tiles = &single_image_tile;
+		num_tiles = 1;
+		tile_width = exr_image.width;
+		tile_height = exr_image.height;
+	} else {
+		tile_width = exr_header.tile_size_x;
+		tile_height = exr_header.tile_size_y;
+		num_tiles = exr_image.num_tiles;
+		exr_tiles = exr_image.tiles;
 	}
 
 	{
-		PoolVector<uint8_t>::Write wd = imgdata.write();
-		uint16_t *iw = (uint16_t *)wd.ptr();
+		uint8_t *wd = imgdata.ptrw();
+		uint16_t *iw = (uint16_t *)wd;
 
 		// Assume `out_rgba` have enough memory allocated.
-		for (int i = 0; i < exr_image.width * exr_image.height; i++) {
+		for (int tile_index = 0; tile_index < num_tiles; tile_index++) {
 
-			Color color(
-					reinterpret_cast<float **>(exr_image.images)[idxR][i],
-					reinterpret_cast<float **>(exr_image.images)[idxG][i],
-					reinterpret_cast<float **>(exr_image.images)[idxB][i]);
+			const EXRTile &tile = exr_tiles[tile_index];
 
-			if (p_force_linear)
-				color = color.to_linear();
+			int tw = tile.width;
+			int th = tile.height;
 
-			*iw++ = Math::make_half_float(color.r);
-			*iw++ = Math::make_half_float(color.g);
-			*iw++ = Math::make_half_float(color.b);
+			const float *r_channel_start = reinterpret_cast<const float *>(tile.images[idxR]);
+			const float *g_channel_start = reinterpret_cast<const float *>(tile.images[idxG]);
+			const float *b_channel_start = reinterpret_cast<const float *>(tile.images[idxB]);
+			const float *a_channel_start = NULL;
 
-			if (idxA > 0) {
-				*iw++ = Math::make_half_float(reinterpret_cast<float **>(exr_image.images)[idxA][i]);
+			if (idxA != -1) {
+				a_channel_start = reinterpret_cast<const float *>(tile.images[idxA]);
+			}
+
+			uint16_t *first_row_w = iw + (tile.offset_y * tile_height * exr_image.width + tile.offset_x * tile_width) * output_channels;
+
+			for (int y = 0; y < th; y++) {
+				const float *r_channel = r_channel_start + y * tile_width;
+				const float *g_channel = g_channel_start + y * tile_width;
+				const float *b_channel = b_channel_start + y * tile_width;
+				const float *a_channel = NULL;
+
+				if (a_channel_start) {
+					a_channel = a_channel_start + y * tile_width;
+				}
+
+				uint16_t *row_w = first_row_w + (y * exr_image.width * output_channels);
+
+				for (int x = 0; x < tw; x++) {
+
+					Color color(*r_channel++, *g_channel++, *b_channel++);
+
+					if (p_force_linear)
+						color = color.to_linear();
+
+					*row_w++ = Math::make_half_float(color.r);
+					*row_w++ = Math::make_half_float(color.g);
+					*row_w++ = Math::make_half_float(color.b);
+
+					if (idxA != -1) {
+						*row_w++ = Math::make_half_float(*a_channel++);
+					}
+				}
 			}
 		}
 	}
 
 	p_image->create(exr_image.width, exr_image.height, false, format, imgdata);
-
-	w = PoolVector<uint8_t>::Write();
 
 	FreeEXRHeader(&exr_header);
 	FreeEXRImage(&exr_image);

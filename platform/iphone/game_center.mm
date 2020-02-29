@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -139,7 +139,6 @@ Error GameCenter::post_score(Variant p_score) {
 
 	[GKScore reportScores:@[ reporter ]
 			withCompletionHandler:^(NSError *error) {
-
 				Dictionary ret;
 				ret["type"] = "post_score";
 				if (error == nil) {
@@ -177,7 +176,6 @@ Error GameCenter::award_achievement(Variant p_params) {
 
 	[GKAchievement reportAchievements:@[ achievement ]
 				withCompletionHandler:^(NSError *error) {
-
 					Dictionary ret;
 					ret["type"] = "award_achievement";
 					if (error == nil) {
@@ -196,16 +194,15 @@ Error GameCenter::award_achievement(Variant p_params) {
 void GameCenter::request_achievement_descriptions() {
 
 	[GKAchievementDescription loadAchievementDescriptionsWithCompletionHandler:^(NSArray *descriptions, NSError *error) {
-
 		Dictionary ret;
 		ret["type"] = "achievement_descriptions";
 		if (error == nil) {
 			ret["result"] = "ok";
-			PoolStringArray names;
-			PoolStringArray titles;
-			PoolStringArray unachieved_descriptions;
-			PoolStringArray achieved_descriptions;
-			PoolIntArray maximum_points;
+			PackedStringArray names;
+			PackedStringArray titles;
+			PackedStringArray unachieved_descriptions;
+			PackedStringArray achieved_descriptions;
+			PackedInt32Array maximum_points;
 			Array hidden;
 			Array replayable;
 
@@ -252,13 +249,12 @@ void GameCenter::request_achievement_descriptions() {
 void GameCenter::request_achievements() {
 
 	[GKAchievement loadAchievementsWithCompletionHandler:^(NSArray *achievements, NSError *error) {
-
 		Dictionary ret;
 		ret["type"] = "achievements";
 		if (error == nil) {
 			ret["result"] = "ok";
-			PoolStringArray names;
-			PoolRealArray percentages;
+			PackedStringArray names;
+			PackedFloat32Array percentages;
 
 			for (int i = 0; i < [achievements count]; i++) {
 
@@ -347,7 +343,6 @@ Error GameCenter::request_identity_verification_signature() {
 
 	GKLocalPlayer *player = [GKLocalPlayer localPlayer];
 	[player generateIdentityVerificationSignatureWithCompletionHandler:^(NSURL *publicKeyUrl, NSData *signature, NSData *salt, uint64_t timestamp, NSError *error) {
-
 		Dictionary ret;
 		ret["type"] = "identity_verification_signature";
 		if (error == nil) {

@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -31,12 +31,12 @@
 #ifndef EDITOR_DATA_H
 #define EDITOR_DATA_H
 
+#include "core/list.h"
+#include "core/pair.h"
+#include "core/undo_redo.h"
 #include "editor/editor_plugin.h"
 #include "editor/plugins/script_editor_plugin.h"
-#include "list.h"
-#include "pair.h"
 #include "scene/resources/texture.h"
-#include "undo_redo.h"
 
 class EditorHistory {
 
@@ -50,6 +50,7 @@ class EditorHistory {
 		REF ref;
 		ObjectID object;
 		String property;
+		bool inspector_only;
 	};
 
 	struct History {
@@ -70,7 +71,7 @@ class EditorHistory {
 		Variant value;
 	};
 
-	void _add_object(ObjectID p_object, const String &p_property, int p_level_change);
+	void _add_object(ObjectID p_object, const String &p_property, int p_level_change, bool p_inspector_only = false);
 
 public:
 	void cleanup_history();
@@ -78,6 +79,7 @@ public:
 	bool is_at_beginning() const;
 	bool is_at_end() const;
 
+	void add_object_inspector_only(ObjectID p_object);
 	void add_object(ObjectID p_object);
 	void add_object(ObjectID p_object, const String &p_subprop);
 	void add_object(ObjectID p_object, int p_relevel);
@@ -85,10 +87,12 @@ public:
 	int get_history_len();
 	int get_history_pos();
 	ObjectID get_history_obj(int p_obj) const;
+	bool is_history_obj_inspector_only(int p_obj) const;
 
 	bool next();
 	bool previous();
 	ObjectID get_current();
+	bool is_current_inspector_only() const;
 
 	int get_path_size() const;
 	ObjectID get_path_object(int p_index) const;
@@ -108,11 +112,12 @@ public:
 
 		String name;
 		Ref<Script> script;
-		Ref<Texture> icon;
+		Ref<Texture2D> icon;
 	};
 
 	struct EditedScene {
 		Node *root;
+		String path;
 		Dictionary editor_states;
 		List<Node *> selection;
 		Vector<EditorHistory::History> history_stored;
@@ -142,6 +147,9 @@ private:
 
 	bool _find_updated_instances(Node *p_root, Node *p_node, Set<String> &checked_paths);
 
+	HashMap<StringName, String> _script_class_icon_paths;
+	HashMap<String, StringName> _script_class_file_to_path;
+
 public:
 	EditorPlugin *get_editor(Object *p_object);
 	EditorPlugin *get_subeditor(Object *p_object);
@@ -170,7 +178,7 @@ public:
 	void save_editor_global_states();
 	void restore_editor_global_states();
 
-	void add_custom_type(const String &p_type, const String &p_inherits, const Ref<Script> &p_script, const Ref<Texture> &p_icon);
+	void add_custom_type(const String &p_type, const String &p_inherits, const Ref<Script> &p_script, const Ref<Texture2D> &p_icon);
 	Object *instance_custom_type(const String &p_type, const String &p_inherits);
 	void remove_custom_type(const String &p_type);
 	const Map<String, Vector<CustomType> > &get_custom_types() const { return custom_types; }
@@ -206,6 +214,21 @@ public:
 	Dictionary restore_edited_scene_state(EditorSelection *p_selection, EditorHistory *p_history);
 	void notify_edited_scene_changed();
 	void notify_resource_saved(const Ref<Resource> &p_resource);
+
+	bool script_class_is_parent(const String &p_class, const String &p_inherits);
+	StringName script_class_get_base(const String &p_class) const;
+	Object *script_class_instance(const String &p_class);
+
+	Ref<Script> script_class_load_script(const String &p_class) const;
+
+	StringName script_class_get_name(const String &p_path) const;
+	void script_class_set_name(const String &p_path, const StringName &p_class);
+
+	String script_class_get_icon_path(const String &p_class) const;
+	void script_class_set_icon_path(const String &p_class, const String &p_icon_path);
+	void script_class_clear_icon_paths() { _script_class_icon_paths.clear(); }
+	void script_class_save_icon_paths();
+	void script_class_load_icon_paths();
 
 	EditorData();
 };
@@ -252,6 +275,7 @@ public:
 	void clear();
 
 	List<Node *> &get_selected_node_list();
+	List<Node *> get_full_selected_node_list();
 	Map<Node *, Object *> &get_selection() { return selection; }
 
 	EditorSelection();

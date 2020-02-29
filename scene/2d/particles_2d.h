@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -28,16 +28,16 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 
-#ifndef PARTICLES_FRAME_H
-#define PARTICLES_FRAME_H
+#ifndef PARTICLES_2D_H
+#define PARTICLES_2D_H
 
+#include "core/rid.h"
 #include "scene/2d/node_2d.h"
-#include "scene/resources/color_ramp.h"
 #include "scene/resources/texture.h"
 
 class Particles2D : public Node2D {
 private:
-	GDCLASS(Particles2D, Node2D)
+	GDCLASS(Particles2D, Node2D);
 
 public:
 	enum DrawOrder {
@@ -59,15 +59,13 @@ private:
 	bool local_coords;
 	int fixed_fps;
 	bool fractional_delta;
-	int v_frames;
-	int h_frames;
 
 	Ref<Material> process_material;
 
 	DrawOrder draw_order;
 
-	Ref<Texture> texture;
-	Ref<Texture> normal_map;
+	Ref<Texture2D> texture;
+	Ref<Texture2D> normal_map;
 
 	void _update_particle_emission_transform();
 
@@ -84,7 +82,7 @@ public:
 	void set_pre_process_time(float p_time);
 	void set_explosiveness_ratio(float p_ratio);
 	void set_randomness_ratio(float p_ratio);
-	void set_visibility_rect(const Rect2 &p_aabb);
+	void set_visibility_rect(const Rect2 &p_visibility_rect);
 	void set_use_local_coordinates(bool p_enable);
 	void set_process_material(const Ref<Material> &p_material);
 	void set_speed_scale(float p_scale);
@@ -110,19 +108,13 @@ public:
 	void set_draw_order(DrawOrder p_order);
 	DrawOrder get_draw_order() const;
 
-	void set_texture(const Ref<Texture> &p_texture);
-	Ref<Texture> get_texture() const;
+	void set_texture(const Ref<Texture2D> &p_texture);
+	Ref<Texture2D> get_texture() const;
 
-	void set_normal_map(const Ref<Texture> &p_normal_map);
-	Ref<Texture> get_normal_map() const;
+	void set_normal_map(const Ref<Texture2D> &p_normal_map);
+	Ref<Texture2D> get_normal_map() const;
 
 	virtual String get_configuration_warning() const;
-
-	void set_v_frames(int p_count);
-	int get_v_frames() const;
-
-	void set_h_frames(int p_count);
-	int get_h_frames() const;
 
 	void restart();
 	Rect2 capture_rect() const;
@@ -132,4 +124,4 @@ public:
 
 VARIANT_ENUM_CAST(Particles2D::DrawOrder)
 
-#endif // PARTICLES_FRAME_H
+#endif // PARTICLES_2D_H

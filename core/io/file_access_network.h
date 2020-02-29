@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -31,10 +31,10 @@
 #ifndef FILE_ACCESS_NETWORK_H
 #define FILE_ACCESS_NETWORK_H
 
-#include "io/stream_peer_tcp.h"
-#include "os/file_access.h"
-#include "os/semaphore.h"
-#include "os/thread.h"
+#include "core/io/stream_peer_tcp.h"
+#include "core/os/file_access.h"
+#include "core/os/semaphore.h"
+#include "core/os/thread.h"
 
 class FileAccessNetwork;
 
@@ -47,15 +47,13 @@ class FileAccessNetworkClient {
 		int size;
 	};
 
-	int ml;
-
 	List<BlockRequest> block_requests;
 
-	Semaphore *sem;
+	SemaphoreOld *sem;
 	Thread *thread;
 	bool quit;
-	Mutex *mutex;
-	Mutex *blockrequest_mutex;
+	Mutex mutex;
+	Mutex blockrequest_mutex;
 	Map<int, FileAccessNetwork *> accesses;
 	Ref<StreamPeerTCP> client;
 	int last_id;
@@ -87,9 +85,9 @@ public:
 
 class FileAccessNetwork : public FileAccess {
 
-	Semaphore *sem;
-	Semaphore *page_sem;
-	Mutex *buffer_mutex;
+	SemaphoreOld *sem;
+	SemaphoreOld *page_sem;
+	Mutex buffer_mutex;
 	bool opened;
 	size_t total_size;
 	mutable size_t pos;
@@ -100,7 +98,6 @@ class FileAccessNetwork : public FileAccess {
 
 	int page_size;
 	int read_ahead;
-	int max_pages;
 
 	mutable int waiting_on_page;
 	mutable int last_activity_val;
@@ -162,6 +159,8 @@ public:
 	virtual bool file_exists(const String &p_path); ///< return true if a file exists
 
 	virtual uint64_t _get_modified_time(const String &p_file);
+	virtual uint32_t _get_unix_permissions(const String &p_file);
+	virtual Error _set_unix_permissions(const String &p_file, uint32_t p_permissions);
 
 	static void configure();
 

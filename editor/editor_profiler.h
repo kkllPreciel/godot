@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -42,7 +42,7 @@
 
 class EditorProfiler : public VBoxContainer {
 
-	GDCLASS(EditorProfiler, VBoxContainer)
+	GDCLASS(EditorProfiler, VBoxContainer);
 
 public:
 	struct Metric {
@@ -100,9 +100,10 @@ public:
 
 private:
 	Button *activate;
+	Button *clear_button;
 	TextureRect *graph;
 	Ref<ImageTexture> graph_texture;
-	PoolVector<uint8_t> graph_image;
+	Vector<uint8_t> graph_image;
 	Tree *variables;
 	HSplitContainer *h_split;
 
@@ -133,8 +134,9 @@ private:
 	void _update_frame();
 
 	void _activate_pressed();
+	void _clear_pressed();
 
-	String _get_time_as_text(Metric &m, float p_time, int p_calls);
+	String _get_time_as_text(const Metric &m, float p_time, int p_calls);
 
 	void _make_metric_ptrs(Metric &m);
 	void _item_edited();
@@ -166,6 +168,8 @@ public:
 	void disable_seeking();
 
 	void clear();
+
+	Vector<Vector<String> > get_data_as_csv() const;
 
 	EditorProfiler();
 };

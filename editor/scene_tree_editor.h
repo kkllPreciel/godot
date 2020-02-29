@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -31,15 +31,13 @@
 #ifndef SCENE_TREE_EDITOR_H
 #define SCENE_TREE_EDITOR_H
 
+#include "core/undo_redo.h"
 #include "editor_data.h"
 #include "editor_settings.h"
 #include "scene/gui/button.h"
 #include "scene/gui/dialogs.h"
 #include "scene/gui/tree.h"
-#include "undo_redo.h"
-/**
-	@author Juan Linietsky <reduzio@gmail.com>
-*/
+
 class SceneTreeEditor : public Control {
 
 	GDCLASS(SceneTreeEditor, Control);
@@ -55,6 +53,7 @@ class SceneTreeEditor : public Control {
 		BUTTON_WARNING = 5,
 		BUTTON_SIGNALS = 6,
 		BUTTON_GROUPS = 7,
+		BUTTON_PIN = 8,
 	};
 
 	Tree *tree;
@@ -66,6 +65,9 @@ class SceneTreeEditor : public Control {
 	AcceptDialog *error;
 	AcceptDialog *warning;
 
+	bool connect_to_script_mode;
+	bool connecting_signal;
+
 	int blocked;
 
 	void _compute_hash(Node *p_node, uint64_t &hash);
@@ -75,6 +77,7 @@ class SceneTreeEditor : public Control {
 	void _update_tree();
 	void _tree_changed();
 	void _node_removed(Node *p_node);
+	void _node_renamed(Node *p_node);
 
 	TreeItem *_find(TreeItem *p_node, const NodePath &p_path);
 	void _notification(int p_what);
@@ -123,12 +126,12 @@ class SceneTreeEditor : public Control {
 
 	void _warning_changed(Node *p_for_node);
 
-	void _editor_settings_changed();
-
 	Timer *update_timer;
 
 	List<StringName> *script_types;
 	bool _is_script_type(const StringName &p_type) const;
+
+	Vector<StringName> valid_types;
 
 public:
 	void set_filter(const String &p_filter);
@@ -146,8 +149,12 @@ public:
 	void set_editor_selection(EditorSelection *p_selection);
 
 	void set_show_enabled_subscene(bool p_show) { show_enabled_subscene = p_show; }
+	void set_valid_types(const Vector<StringName> &p_valid);
 
 	void update_tree() { _update_tree(); }
+
+	void set_connect_to_script_mode(bool p_enable);
+	void set_connecting_signal(bool p_enable);
 
 	Tree *get_scene_tree() { return tree; }
 
@@ -162,10 +169,12 @@ class SceneTreeDialog : public ConfirmationDialog {
 	SceneTreeEditor *tree;
 	//Button *select;
 	//Button *cancel;
+	LineEdit *filter;
 
 	void update_tree();
 	void _select();
 	void _cancel();
+	void _filter_changed(const String &p_filter);
 
 protected:
 	void _notification(int p_what);

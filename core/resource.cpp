@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -30,11 +30,12 @@
 
 #include "resource.h"
 
-#include "core_string_names.h"
-#include "io/resource_loader.h"
-#include "os/file_access.h"
+#include "core/core_string_names.h"
+#include "core/io/resource_loader.h"
+#include "core/os/file_access.h"
+#include "core/script_language.h"
 #include "scene/main/node.h" //only so casting works
-#include "script_language.h"
+
 #include <stdio.h>
 
 void Resource::emit_changed() {
@@ -67,15 +68,17 @@ void Resource::set_path(const String &p_path, bool p_take_over) {
 		if (p_take_over) {
 
 			ResourceCache::lock->write_lock();
-			ResourceCache::resources.get(p_path)->set_name("");
+			Resource **res = ResourceCache::resources.getptr(p_path);
+			if (res) {
+				(*res)->set_name("");
+			}
 			ResourceCache::lock->write_unlock();
 		} else {
 			ResourceCache::lock->read_lock();
 			bool exists = ResourceCache::resources.has(p_path);
 			ResourceCache::lock->read_unlock();
 
-			ERR_EXPLAIN("Another resource is loaded from path: " + p_path + " (possible cyclic resource inclusion)");
-			ERR_FAIL_COND(exists);
+			ERR_FAIL_COND_MSG(exists, "Another resource is loaded from path '" + p_path + "' (possible cyclic resource inclusion).");
 		}
 	}
 	path_cache = p_path;
@@ -151,7 +154,7 @@ Ref<Resource> Resource::duplicate_for_local_scene(Node *p_for_scene, Map<Ref<Res
 	List<PropertyInfo> plist;
 	get_property_list(&plist);
 
-	Resource *r = (Resource *)ClassDB::instance(get_class());
+	Resource *r = Object::cast_to<Resource>(ClassDB::instance(get_class()));
 	ERR_FAIL_COND_V(!r, Ref<Resource>());
 
 	r->local_scene = p_for_scene;
@@ -182,12 +185,13 @@ Ref<Resource> Resource::duplicate_for_local_scene(Node *p_for_scene, Map<Ref<Res
 		r->set(E->get().name, p);
 	}
 
-	return Ref<Resource>(r);
+	RES res = Ref<Resource>(r);
+
+	return res;
 }
 
 void Resource::configure_for_local_scene(Node *p_for_scene, Map<Ref<Resource>, Ref<Resource> > &remap_cache) {
 
-	print_line("configure for local: " + get_class());
 	List<PropertyInfo> plist;
 	get_property_list(&plist);
 
@@ -226,15 +230,20 @@ Ref<Resource> Resource::duplicate(bool p_subresources) const {
 
 		if (!(E->get().usage & PROPERTY_USAGE_STORAGE))
 			continue;
-		Variant p = get(E->get().name).duplicate(true);
-		if (p.get_type() == Variant::OBJECT && p_subresources) {
+		Variant p = get(E->get().name);
+
+		if ((p.get_type() == Variant::DICTIONARY || p.get_type() == Variant::ARRAY)) {
+			r->set(E->get().name, p.duplicate(p_subresources));
+		} else if (p.get_type() == Variant::OBJECT && (p_subresources || (E->get().usage & PROPERTY_USAGE_DO_NOT_SHARE_ON_DUPLICATE))) {
 
 			RES sr = p;
-			if (sr.is_valid())
-				p = sr->duplicate(true);
-		}
+			if (sr.is_valid()) {
+				r->set(E->get().name, sr->duplicate(p_subresources));
+			}
+		} else {
 
-		r->set(E->get().name, p);
+			r->set(E->get().name, p);
+		}
 	}
 
 	return Ref<Resource>(r);
@@ -270,8 +279,7 @@ void Resource::notify_change_to_owners() {
 	for (Set<ObjectID>::Element *E = owners.front(); E; E = E->next()) {
 
 		Object *obj = ObjectDB::get_instance(E->get());
-		ERR_EXPLAIN("Object was deleted, while still owning a resource");
-		ERR_CONTINUE(!obj); //wtf
+		ERR_CONTINUE_MSG(!obj, "Object was deleted, while still owning a resource."); //wtf
 		//TODO store string
 		obj->call("resource_changed", RES(this));
 	}
@@ -288,7 +296,7 @@ uint32_t Resource::hash_edited_version() const {
 
 	for (List<PropertyInfo>::Element *E = plist.front(); E; E = E->next()) {
 
-		if (E->get().type == Variant::OBJECT && E->get().hint == PROPERTY_HINT_RESOURCE_TYPE) {
+		if (E->get().usage & PROPERTY_USAGE_STORAGE && E->get().type == Variant::OBJECT && E->get().hint == PROPERTY_HINT_RESOURCE_TYPE) {
 			RES res = get(E->get().name);
 			if (res.is_valid()) {
 				hash = hash_djb2_one_32(res->hash_edited_version(), hash);
@@ -356,6 +364,47 @@ bool Resource::is_translation_remapped() const {
 	return remapped_list.in_list();
 }
 
+#ifdef TOOLS_ENABLED
+//helps keep IDs same number when loading/saving scenes. -1 clears ID and it Returns -1 when no id stored
+void Resource::set_id_for_path(const String &p_path, int p_id) {
+	if (p_id == -1) {
+		if (ResourceCache::path_cache_lock) {
+			ResourceCache::path_cache_lock->write_lock();
+		}
+		ResourceCache::resource_path_cache[p_path].erase(get_path());
+		if (ResourceCache::path_cache_lock) {
+			ResourceCache::path_cache_lock->write_unlock();
+		}
+	} else {
+		if (ResourceCache::path_cache_lock) {
+			ResourceCache::path_cache_lock->write_lock();
+		}
+		ResourceCache::resource_path_cache[p_path][get_path()] = p_id;
+		if (ResourceCache::path_cache_lock) {
+			ResourceCache::path_cache_lock->write_unlock();
+		}
+	}
+}
+
+int Resource::get_id_for_path(const String &p_path) const {
+	if (ResourceCache::path_cache_lock) {
+		ResourceCache::path_cache_lock->read_lock();
+	}
+	if (ResourceCache::resource_path_cache[p_path].has(get_path())) {
+		int result = ResourceCache::resource_path_cache[p_path][get_path()];
+		if (ResourceCache::path_cache_lock) {
+			ResourceCache::path_cache_lock->read_unlock();
+		}
+		return result;
+	} else {
+		if (ResourceCache::path_cache_lock) {
+			ResourceCache::path_cache_lock->read_unlock();
+		}
+		return -1;
+	}
+}
+#endif
+
 void Resource::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("set_path", "path"), &Resource::_set_path);
@@ -372,9 +421,9 @@ void Resource::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("duplicate", "subresources"), &Resource::duplicate, DEFVAL(false));
 	ADD_SIGNAL(MethodInfo("changed"));
 	ADD_GROUP("Resource", "resource_");
-	ADD_PROPERTYNZ(PropertyInfo(Variant::BOOL, "resource_local_to_scene"), "set_local_to_scene", "is_local_to_scene");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "resource_local_to_scene"), "set_local_to_scene", "is_local_to_scene");
 	ADD_PROPERTY(PropertyInfo(Variant::STRING, "resource_path", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR), "set_path", "get_path");
-	ADD_PROPERTYNZ(PropertyInfo(Variant::STRING, "resource_name"), "set_name", "get_name");
+	ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "resource_name"), "set_name", "get_name");
 
 	BIND_VMETHOD(MethodInfo("_setup_local_to_scene"));
 }
@@ -400,17 +449,26 @@ Resource::~Resource() {
 		ResourceCache::lock->write_unlock();
 	}
 	if (owners.size()) {
-		WARN_PRINT("Resource is still owned");
+		WARN_PRINT("Resource is still owned.");
 	}
 }
 
 HashMap<String, Resource *> ResourceCache::resources;
+#ifdef TOOLS_ENABLED
+HashMap<String, HashMap<String, int> > ResourceCache::resource_path_cache;
+#endif
 
 RWLock *ResourceCache::lock = NULL;
+#ifdef TOOLS_ENABLED
+RWLock *ResourceCache::path_cache_lock = NULL;
+#endif
 
 void ResourceCache::setup() {
 
 	lock = RWLock::create();
+#ifdef TOOLS_ENABLED
+	path_cache_lock = RWLock::create();
+#endif
 }
 
 void ResourceCache::clear() {
@@ -484,7 +542,7 @@ void ResourceCache::dump(const char *p_file, bool p_short) {
 	FileAccess *f = NULL;
 	if (p_file) {
 		f = FileAccess::open(p_file, FileAccess::WRITE);
-		ERR_FAIL_COND(!f);
+		ERR_FAIL_COND_MSG(!f, "Cannot create file at path '" + String(p_file) + "'.");
 	}
 
 	const String *K = NULL;

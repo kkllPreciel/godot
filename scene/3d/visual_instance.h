@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -31,18 +31,17 @@
 #ifndef VISUAL_INSTANCE_H
 #define VISUAL_INSTANCE_H
 
-#include "face3.h"
-#include "rid.h"
+#include "core/math/face3.h"
+#include "core/rid.h"
 #include "scene/3d/spatial.h"
 #include "scene/resources/material.h"
-/**
-	@author Juan Linietsky <reduzio@gmail.com>
-*/
+
 class VisualInstance : public Spatial {
 
 	GDCLASS(VisualInstance, Spatial);
 	OBJ_CATEGORY("3D Visual Nodes");
 
+	RID base;
 	RID instance;
 	uint32_t layers;
 
@@ -64,14 +63,18 @@ public:
 
 	RID get_instance() const;
 	virtual AABB get_aabb() const = 0;
-	virtual PoolVector<Face3> get_faces(uint32_t p_usage_flags) const = 0;
+	virtual Vector<Face3> get_faces(uint32_t p_usage_flags) const = 0;
 
 	virtual AABB get_transformed_aabb() const; // helper
 
 	void set_base(const RID &p_base);
+	RID get_base() const;
 
 	void set_layer_mask(uint32_t p_mask);
 	uint32_t get_layer_mask() const;
+
+	void set_layer_mask_bit(int p_layer, bool p_enable);
+	bool get_layer_mask_bit(int p_layer) const;
 
 	VisualInstance();
 	~VisualInstance();
@@ -84,6 +87,8 @@ class GeometryInstance : public VisualInstance {
 public:
 	enum Flags {
 		FLAG_USE_BAKED_LIGHT = VS::INSTANCE_FLAG_USE_BAKED_LIGHT,
+		FLAG_USE_DYNAMIC_GI = VS::INSTANCE_FLAG_USE_DYNAMIC_GI,
+		FLAG_DRAW_NEXT_FRAME_IF_VISIBLE = VS::INSTANCE_FLAG_DRAW_NEXT_FRAME_IF_VISIBLE,
 		FLAG_MAX = VS::INSTANCE_FLAG_MAX,
 	};
 
@@ -133,6 +138,8 @@ public:
 
 	void set_extra_cull_margin(float p_margin);
 	float get_extra_cull_margin() const;
+
+	void set_custom_aabb(AABB aabb);
 
 	GeometryInstance();
 };

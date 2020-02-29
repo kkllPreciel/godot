@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2017 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2017 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -33,7 +33,6 @@
 #include "scene/3d/physics_body.h"
 
 void PhysicalBoneEditor::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("_on_toggle_button_transform_joint", "is_pressed"), &PhysicalBoneEditor::_on_toggle_button_transform_joint);
 }
 
 void PhysicalBoneEditor::_on_toggle_button_transform_joint(bool p_is_pressed) {
@@ -61,23 +60,15 @@ PhysicalBoneEditor::PhysicalBoneEditor(EditorNode *p_editor) :
 	button_transform_joint = memnew(ToolButton);
 	spatial_editor_hb->add_child(button_transform_joint);
 
-	button_transform_joint->set_text(TTR("Move joint"));
+	button_transform_joint->set_text(TTR("Move Joint"));
 	button_transform_joint->set_icon(SpatialEditor::get_singleton()->get_icon("PhysicalBone", "EditorIcons"));
 	button_transform_joint->set_toggle_mode(true);
-	button_transform_joint->connect("toggled", this, "_on_toggle_button_transform_joint");
+	button_transform_joint->connect("toggled", callable_mp(this, &PhysicalBoneEditor::_on_toggle_button_transform_joint));
 
 	hide();
 }
 
-PhysicalBoneEditor::~PhysicalBoneEditor() {
-	// TODO the spatial_editor_hb should be removed from SpatialEditor, but in this moment it's not possible
-	for (int i = spatial_editor_hb->get_child_count() - 1; 0 <= i; --i) {
-		Node *n = spatial_editor_hb->get_child(i);
-		spatial_editor_hb->remove_child(n);
-		memdelete(n);
-	}
-	memdelete(spatial_editor_hb);
-}
+PhysicalBoneEditor::~PhysicalBoneEditor() {}
 
 void PhysicalBoneEditor::set_selected(PhysicalBone *p_pb) {
 
@@ -98,19 +89,17 @@ void PhysicalBoneEditor::show() {
 
 PhysicalBonePlugin::PhysicalBonePlugin(EditorNode *p_editor) :
 		editor(p_editor),
-		selected(NULL) {
-
-	physical_bone_editor = memnew(PhysicalBoneEditor(editor));
-}
+		selected(NULL),
+		physical_bone_editor(editor) {}
 
 void PhysicalBonePlugin::make_visible(bool p_visible) {
 	if (p_visible) {
 
-		physical_bone_editor->show();
+		physical_bone_editor.show();
 	} else {
 
-		physical_bone_editor->hide();
-		physical_bone_editor->set_selected(NULL);
+		physical_bone_editor.hide();
+		physical_bone_editor.set_selected(NULL);
 		selected = NULL;
 	}
 }
@@ -119,5 +108,5 @@ void PhysicalBonePlugin::edit(Object *p_node) {
 	selected = static_cast<PhysicalBone *>(p_node); // Trust it
 	ERR_FAIL_COND(!selected);
 
-	physical_bone_editor->set_selected(selected);
+	physical_bone_editor.set_selected(selected);
 }

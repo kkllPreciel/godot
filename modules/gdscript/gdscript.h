@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -31,10 +31,10 @@
 #ifndef GDSCRIPT_H
 #define GDSCRIPT_H
 
+#include "core/io/resource_loader.h"
+#include "core/io/resource_saver.h"
+#include "core/script_language.h"
 #include "gdscript_function.h"
-#include "io/resource_loader.h"
-#include "io/resource_saver.h"
-#include "script_language.h"
 
 class GDScriptNativeClass : public Reference {
 
@@ -63,7 +63,8 @@ class GDScript : public Script {
 		int index;
 		StringName setter;
 		StringName getter;
-		ScriptInstance::RPCMode rpc_mode;
+		MultiplayerAPI::RPCMode rpc_mode;
+		GDScriptDataType data_type;
 	};
 
 	friend class GDScriptInstance;
@@ -72,7 +73,6 @@ class GDScript : public Script {
 	friend class GDScriptFunctions;
 	friend class GDScriptLanguage;
 
-	Variant _static_ref; //used for static call
 	Ref<GDScriptNativeClass> native;
 	Ref<GDScript> base;
 	GDScript *_base; //fast pointer access
@@ -84,6 +84,8 @@ class GDScript : public Script {
 	Map<StringName, MemberInfo> member_indices; //members are just indices to the instanced script.
 	Map<StringName, Ref<GDScript> > subclasses;
 	Map<StringName, Vector<StringName> > _signals;
+	Vector<ScriptNetData> rpc_functions;
+	Vector<ScriptNetData> rpc_variables;
 
 #ifdef TOOLS_ENABLED
 
@@ -96,6 +98,7 @@ class GDScript : public Script {
 	Ref<GDScript> base_cache;
 	Set<ObjectID> inheriters_cache;
 	bool source_changed_cache;
+	bool placeholder_fallback_enabled;
 	void _update_exports_values(Map<StringName, Variant> &values, List<PropertyInfo> &propnames);
 
 #endif
@@ -109,9 +112,10 @@ class GDScript : public Script {
 	String source;
 	String path;
 	String name;
+	String fully_qualified_name;
 	SelfList<GDScript> script_list;
 
-	GDScriptInstance *_create_instance(const Variant **p_args, int p_argcount, Object *p_owner, bool p_isref, Variant::CallError &r_error);
+	GDScriptInstance *_create_instance(const Variant **p_args, int p_argcount, Object *p_owner, bool p_isref, Callable::CallError &r_error);
 
 	void _set_subclass_path(Ref<GDScript> &p_sc, const String &p_path);
 
@@ -129,24 +133,31 @@ class GDScript : public Script {
 
 	bool _update_exports();
 
+	void _save_orphaned_subclasses();
+
 protected:
 	bool _get(const StringName &p_name, Variant &r_ret) const;
 	bool _set(const StringName &p_name, const Variant &p_value);
 	void _get_property_list(List<PropertyInfo> *p_properties) const;
 
-	Variant call(const StringName &p_method, const Variant **p_args, int p_argcount, Variant::CallError &r_error);
+	Variant call(const StringName &p_method, const Variant **p_args, int p_argcount, Callable::CallError &r_error);
 	//void call_multilevel(const StringName& p_method,const Variant** p_args,int p_argcount);
 
 	static void _bind_methods();
 
 public:
-	bool is_valid() const { return valid; }
+	virtual bool is_valid() const { return valid; }
 
 	const Map<StringName, Ref<GDScript> > &get_subclasses() const { return subclasses; }
 	const Map<StringName, Variant> &get_constants() const { return constants; }
 	const Set<StringName> &get_members() const { return members; }
+	const GDScriptDataType &get_member_type(const StringName &p_member) const {
+		CRASH_COND(!member_indices.has(p_member));
+		return member_indices[p_member].data_type;
+	}
 	const Map<StringName, GDScriptFunction *> &get_member_functions() const { return member_functions; }
 	const Ref<GDScriptNativeClass> &get_native() const { return native; }
+	const String &get_script_class_name() const { return name; }
 
 	virtual bool has_script_signal(const StringName &p_signal) const;
 	virtual void get_script_signal_list(List<MethodInfo> *r_signals) const;
@@ -158,13 +169,14 @@ public:
 	const Map<StringName, GDScriptFunction *> &debug_get_member_functions() const; //this is debug only
 	StringName debug_get_member_by_index(int p_idx) const;
 
-	Variant _new(const Variant **p_args, int p_argcount, Variant::CallError &r_error);
+	Variant _new(const Variant **p_args, int p_argcount, Callable::CallError &r_error);
 	virtual bool can_instance() const;
 
 	virtual Ref<Script> get_base_script() const;
 
 	virtual StringName get_instance_base_type() const; // this may not work in all scripts, will return empty if so
 	virtual ScriptInstance *instance_create(Object *p_this);
+	virtual PlaceHolderScriptInstance *placeholder_instance_create(Object *p_this);
 	virtual bool instance_has(const Object *p_this) const;
 
 	virtual bool has_source_code() const;
@@ -202,6 +214,22 @@ public:
 	virtual void get_constants(Map<StringName, Variant> *p_constants);
 	virtual void get_members(Set<StringName> *p_members);
 
+	virtual Vector<ScriptNetData> get_rpc_methods() const;
+	virtual uint16_t get_rpc_method_id(const StringName &p_method) const;
+	virtual StringName get_rpc_method(const uint16_t p_rpc_method_id) const;
+	virtual MultiplayerAPI::RPCMode get_rpc_mode_by_id(const uint16_t p_rpc_method_id) const;
+	virtual MultiplayerAPI::RPCMode get_rpc_mode(const StringName &p_method) const;
+
+	virtual Vector<ScriptNetData> get_rset_properties() const;
+	virtual uint16_t get_rset_property_id(const StringName &p_variable) const;
+	virtual StringName get_rset_property(const uint16_t p_variable_id) const;
+	virtual MultiplayerAPI::RPCMode get_rset_mode_by_id(const uint16_t p_variable_id) const;
+	virtual MultiplayerAPI::RPCMode get_rset_mode(const StringName &p_variable) const;
+
+#ifdef TOOLS_ENABLED
+	virtual bool is_placeholder_fallback_enabled() const { return placeholder_fallback_enabled; }
+#endif
+
 	GDScript();
 	~GDScript();
 };
@@ -212,6 +240,7 @@ class GDScriptInstance : public ScriptInstance {
 	friend class GDScriptFunctions;
 	friend class GDScriptCompiler;
 
+	ObjectID owner_id;
 	Object *owner;
 	Ref<GDScript> script;
 #ifdef DEBUG_ENABLED
@@ -232,13 +261,14 @@ public:
 
 	virtual void get_method_list(List<MethodInfo> *p_list) const;
 	virtual bool has_method(const StringName &p_method) const;
-	virtual Variant call(const StringName &p_method, const Variant **p_args, int p_argcount, Variant::CallError &r_error);
+	virtual Variant call(const StringName &p_method, const Variant **p_args, int p_argcount, Callable::CallError &r_error);
 	virtual void call_multilevel(const StringName &p_method, const Variant **p_args, int p_argcount);
 	virtual void call_multilevel_reversed(const StringName &p_method, const Variant **p_args, int p_argcount);
 
 	Variant debug_get_member_by_index(int p_idx) const { return members[p_idx]; }
 
 	virtual void notification(int p_notification);
+	String to_string(bool *r_valid);
 
 	virtual Ref<Script> get_script() const;
 
@@ -248,12 +278,67 @@ public:
 
 	void reload_members();
 
-	virtual RPCMode get_rpc_mode(const StringName &p_method) const;
-	virtual RPCMode get_rset_mode(const StringName &p_variable) const;
+	virtual Vector<ScriptNetData> get_rpc_methods() const;
+	virtual uint16_t get_rpc_method_id(const StringName &p_method) const;
+	virtual StringName get_rpc_method(const uint16_t p_rpc_method_id) const;
+	virtual MultiplayerAPI::RPCMode get_rpc_mode_by_id(const uint16_t p_rpc_method_id) const;
+	virtual MultiplayerAPI::RPCMode get_rpc_mode(const StringName &p_method) const;
+
+	virtual Vector<ScriptNetData> get_rset_properties() const;
+	virtual uint16_t get_rset_property_id(const StringName &p_variable) const;
+	virtual StringName get_rset_property(const uint16_t p_variable_id) const;
+	virtual MultiplayerAPI::RPCMode get_rset_mode_by_id(const uint16_t p_variable_id) const;
+	virtual MultiplayerAPI::RPCMode get_rset_mode(const StringName &p_variable) const;
 
 	GDScriptInstance();
 	~GDScriptInstance();
 };
+
+#ifdef DEBUG_ENABLED
+struct GDScriptWarning {
+	enum Code {
+		UNASSIGNED_VARIABLE, // Variable used but never assigned
+		UNASSIGNED_VARIABLE_OP_ASSIGN, // Variable never assigned but used in an assignment operation (+=, *=, etc)
+		UNUSED_VARIABLE, // Local variable is declared but never used
+		SHADOWED_VARIABLE, // Variable name shadowed by other variable
+		UNUSED_CLASS_VARIABLE, // Class variable is declared but never used in the file
+		UNUSED_ARGUMENT, // Function argument is never used
+		UNREACHABLE_CODE, // Code after a return statement
+		STANDALONE_EXPRESSION, // Expression not assigned to a variable
+		VOID_ASSIGNMENT, // Function returns void but it's assigned to a variable
+		NARROWING_CONVERSION, // Float value into an integer slot, precision is lost
+		FUNCTION_MAY_YIELD, // Typed assign of function call that yields (it may return a function state)
+		VARIABLE_CONFLICTS_FUNCTION, // Variable has the same name of a function
+		FUNCTION_CONFLICTS_VARIABLE, // Function has the same name of a variable
+		FUNCTION_CONFLICTS_CONSTANT, // Function has the same name of a constant
+		INCOMPATIBLE_TERNARY, // Possible values of a ternary if are not mutually compatible
+		UNUSED_SIGNAL, // Signal is defined but never emitted
+		RETURN_VALUE_DISCARDED, // Function call returns something but the value isn't used
+		PROPERTY_USED_AS_FUNCTION, // Function not found, but there's a property with the same name
+		CONSTANT_USED_AS_FUNCTION, // Function not found, but there's a constant with the same name
+		FUNCTION_USED_AS_PROPERTY, // Property not found, but there's a function with the same name
+		INTEGER_DIVISION, // Integer divide by integer, decimal part is discarded
+		UNSAFE_PROPERTY_ACCESS, // Property not found in the detected type (but can be in subtypes)
+		UNSAFE_METHOD_ACCESS, // Function not found in the detected type (but can be in subtypes)
+		UNSAFE_CAST, // Cast used in an unknown type
+		UNSAFE_CALL_ARGUMENT, // Function call argument is of a supertype of the require argument
+		DEPRECATED_KEYWORD, // The keyword is deprecated and should be replaced
+		STANDALONE_TERNARY, // Return value of ternary expression is discarded
+		WARNING_MAX,
+	} code;
+	Vector<String> symbols;
+	int line;
+
+	String get_name() const;
+	String get_message() const;
+	static String get_name_from_code(Code p_code);
+	static Code get_code_from_name(const String &p_name);
+
+	GDScriptWarning() :
+			code(WARNING_MAX),
+			line(-1) {}
+};
+#endif // DEBUG_ENABLED
 
 class GDScriptLanguage : public ScriptLanguage {
 
@@ -284,7 +369,7 @@ class GDScriptLanguage : public ScriptLanguage {
 
 	friend class GDScriptInstance;
 
-	Mutex *lock;
+	Mutex lock;
 
 	friend class GDScript;
 
@@ -294,6 +379,8 @@ class GDScriptLanguage : public ScriptLanguage {
 	SelfList<GDScriptFunction>::List function_list;
 	bool profiling;
 	uint64_t script_frame_time;
+
+	Map<String, ObjectID> orphan_subclasses;
 
 public:
 	int calls;
@@ -349,10 +436,11 @@ public:
 		Vector<StackInfo> csi;
 		csi.resize(_debug_call_stack_pos);
 		for (int i = 0; i < _debug_call_stack_pos; i++) {
-			csi[_debug_call_stack_pos - i - 1].line = _call_stack[i].line ? *_call_stack[i].line : 0;
-			if (_call_stack[i].function)
-				csi[_debug_call_stack_pos - i - 1].func = _call_stack[i].function->get_name();
-			csi[_debug_call_stack_pos - i - 1].file = _call_stack[i].function->get_script()->get_path();
+			csi.write[_debug_call_stack_pos - i - 1].line = _call_stack[i].line ? *_call_stack[i].line : 0;
+			if (_call_stack[i].function) {
+				csi.write[_debug_call_stack_pos - i - 1].func = _call_stack[i].function->get_name();
+				csi.write[_debug_call_stack_pos - i - 1].file = _call_stack[i].function->get_script()->get_path();
+			}
 		}
 		return csi;
 	}
@@ -388,19 +476,20 @@ public:
 	virtual void get_reserved_words(List<String> *p_words) const;
 	virtual void get_comment_delimiters(List<String> *p_delimiters) const;
 	virtual void get_string_delimiters(List<String> *p_delimiters) const;
+	virtual String _get_processed_template(const String &p_template, const String &p_base_class_name) const;
 	virtual Ref<Script> get_template(const String &p_class_name, const String &p_base_class_name) const;
 	virtual bool is_using_templates();
 	virtual void make_template(const String &p_class_name, const String &p_base_class_name, Ref<Script> &p_script);
-	virtual bool validate(const String &p_script, int &r_line_error, int &r_col_error, String &r_test_error, const String &p_path = "", List<String> *r_functions = NULL) const;
+	virtual bool validate(const String &p_script, int &r_line_error, int &r_col_error, String &r_test_error, const String &p_path = "", List<String> *r_functions = NULL, List<ScriptLanguage::Warning> *r_warnings = NULL, Set<int> *r_safe_lines = NULL) const;
 	virtual Script *create_script() const;
 	virtual bool has_named_classes() const;
 	virtual bool supports_builtin_mode() const;
 	virtual bool can_inherit_from_file() { return true; }
 	virtual int find_function(const String &p_function, const String &p_code) const;
-	virtual String make_function(const String &p_class, const String &p_name, const PoolStringArray &p_args) const;
-	virtual Error complete_code(const String &p_code, const String &p_base_path, Object *p_owner, List<String> *r_options, bool &r_forced, String &r_call_hint);
+	virtual String make_function(const String &p_class, const String &p_name, const PackedStringArray &p_args) const;
+	virtual Error complete_code(const String &p_code, const String &p_path, Object *p_owner, List<ScriptCodeCompletionOption> *r_options, bool &r_forced, String &r_call_hint);
 #ifdef TOOLS_ENABLED
-	virtual Error lookup_code(const String &p_code, const String &p_symbol, const String &p_base_path, Object *p_owner, LookupResult &r_result);
+	virtual Error lookup_code(const String &p_code, const String &p_symbol, const String &p_path, Object *p_owner, LookupResult &r_result);
 #endif
 	virtual String _get_indentation() const;
 	virtual void auto_indent_code(String &p_code, int p_from_line, int p_to_line) const;
@@ -439,16 +528,25 @@ public:
 
 	virtual void get_recognized_extensions(List<String> *p_extensions) const;
 
+	/* GLOBAL CLASSES */
+
+	virtual bool handles_global_class_type(const String &p_type) const;
+	virtual String get_global_class_name(const String &p_path, String *r_base_type = NULL, String *r_icon_path = NULL) const;
+
+	void add_orphan_subclass(const String &p_qualified_name, const ObjectID &p_subclass);
+	Ref<GDScript> get_orphan_subclass(const String &p_qualified_name);
+
 	GDScriptLanguage();
 	~GDScriptLanguage();
 };
 
 class ResourceFormatLoaderGDScript : public ResourceFormatLoader {
 public:
-	virtual RES load(const String &p_path, const String &p_original_path = "", Error *r_error = NULL);
+	virtual RES load(const String &p_path, const String &p_original_path = "", Error *r_error = NULL, bool p_use_sub_threads = false, float *r_progress = nullptr);
 	virtual void get_recognized_extensions(List<String> *p_extensions) const;
 	virtual bool handles_type(const String &p_type) const;
 	virtual String get_resource_type(const String &p_path) const;
+	virtual void get_dependencies(const String &p_path, List<String> *p_dependencies, bool p_add_types = false);
 };
 
 class ResourceFormatSaverGDScript : public ResourceFormatSaver {

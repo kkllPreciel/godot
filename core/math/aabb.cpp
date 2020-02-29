@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -30,7 +30,7 @@
 
 #include "aabb.h"
 
-#include "print_string.h"
+#include "core/print_string.h"
 
 real_t AABB::get_area() const {
 
@@ -67,6 +67,11 @@ void AABB::merge_with(const AABB &p_aabb) {
 
 	position = min;
 	size = max - min;
+}
+
+bool AABB::is_equal_approx(const AABB &p_aabb) const {
+
+	return position.is_equal_approx(p_aabb.position) && size.is_equal_approx(p_aabb.size);
 }
 
 AABB AABB::intersection(const AABB &p_aabb) const {
@@ -245,7 +250,6 @@ Vector3 AABB::get_longest_axis() const {
 
 	if (size.z > max_size) {
 		axis = Vector3(0, 0, 1);
-		max_size = size.z;
 	}
 
 	return axis;
@@ -262,7 +266,6 @@ int AABB::get_longest_axis_index() const {
 
 	if (size.z > max_size) {
 		axis = 2;
-		max_size = size.z;
 	}
 
 	return axis;
@@ -280,7 +283,6 @@ Vector3 AABB::get_shortest_axis() const {
 
 	if (size.z < max_size) {
 		axis = Vector3(0, 0, 1);
-		max_size = size.z;
 	}
 
 	return axis;
@@ -297,7 +299,6 @@ int AABB::get_shortest_axis_index() const {
 
 	if (size.z < max_size) {
 		axis = 2;
-		max_size = size.z;
 	}
 
 	return axis;

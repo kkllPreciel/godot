@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -35,11 +35,12 @@
 #include "core/os/mutex.h"
 #include "core/os/thread.h"
 
-#include <SoundPlayer.h>
 #include <kernel/image.h> // needed for image_id
 
+#include <SoundPlayer.h>
+
 class AudioDriverMediaKit : public AudioDriver {
-	Mutex *mutex;
+	Mutex mutex;
 
 	BSoundPlayer *player;
 	static int32_t *samples_in;

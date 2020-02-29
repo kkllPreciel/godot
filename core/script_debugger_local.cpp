@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -29,11 +29,11 @@
 /*************************************************************************/
 
 #include "script_debugger_local.h"
+
+#include "core/os/os.h"
 #include "scene/main/scene_tree.h"
 
-#include "os/os.h"
-
-void ScriptDebuggerLocal::debug(ScriptLanguage *p_script, bool p_can_continue) {
+void ScriptDebuggerLocal::debug(ScriptLanguage *p_script, bool p_can_continue, bool p_is_error_breakpoint) {
 
 	if (!target_function.empty()) {
 		String current_function = p_script->debug_get_stack_level_function(0);
@@ -325,7 +325,7 @@ void ScriptDebuggerLocal::idle_poll() {
 
 	int ofs = 0;
 	for (int i = 0; i < ScriptServer::get_language_count(); i++) {
-		ofs += ScriptServer::get_language(i)->profiling_get_frame_data(&pinfo[ofs], pinfo.size() - ofs);
+		ofs += ScriptServer::get_language(i)->profiling_get_frame_data(&pinfo.write[ofs], pinfo.size() - ofs);
 	}
 
 	SortArray<ScriptLanguage::ProfilingInfo, _ScriptDebuggerLocalProfileInfoSort> sort;
@@ -377,7 +377,7 @@ void ScriptDebuggerLocal::profiling_end() {
 	int ofs = 0;
 
 	for (int i = 0; i < ScriptServer::get_language_count(); i++) {
-		ofs += ScriptServer::get_language(i)->profiling_get_accumulated_data(&pinfo[ofs], pinfo.size() - ofs);
+		ofs += ScriptServer::get_language(i)->profiling_get_accumulated_data(&pinfo.write[ofs], pinfo.size() - ofs);
 	}
 
 	SortArray<ScriptLanguage::ProfilingInfo, _ScriptDebuggerLocalProfileInfoSort> sort;

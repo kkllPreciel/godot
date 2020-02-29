@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -42,7 +42,7 @@ class SpriteFrames : public Resource {
 
 		float speed;
 		bool loop;
-		Vector<Ref<Texture> > frames;
+		Vector<Ref<Texture2D> > frames;
 
 		Anim() {
 			loop = true;
@@ -50,7 +50,11 @@ class SpriteFrames : public Resource {
 		}
 
 		StringName normal_name;
+		StringName specular_name;
 	};
+
+	Color specular_color;
+	float shininess;
 
 	Map<StringName, Anim> animations;
 
@@ -72,6 +76,7 @@ public:
 	void rename_animation(const StringName &p_prev, const StringName &p_next);
 
 	void get_animation_list(List<StringName> *r_animations) const;
+	Vector<String> get_animation_names() const;
 
 	void set_animation_speed(const StringName &p_anim, float p_fps);
 	float get_animation_speed(const StringName &p_anim) const;
@@ -79,40 +84,54 @@ public:
 	void set_animation_loop(const StringName &p_anim, bool p_loop);
 	bool get_animation_loop(const StringName &p_anim) const;
 
-	void add_frame(const StringName &p_anim, const Ref<Texture> &p_frame, int p_at_pos = -1);
+	void add_frame(const StringName &p_anim, const Ref<Texture2D> &p_frame, int p_at_pos = -1);
 	int get_frame_count(const StringName &p_anim) const;
-	_FORCE_INLINE_ Ref<Texture> get_frame(const StringName &p_anim, int p_idx) const {
+	_FORCE_INLINE_ Ref<Texture2D> get_frame(const StringName &p_anim, int p_idx) const {
 
 		const Map<StringName, Anim>::Element *E = animations.find(p_anim);
-		ERR_FAIL_COND_V(!E, Ref<Texture>());
-		ERR_FAIL_COND_V(p_idx < 0, Ref<Texture>());
+		ERR_FAIL_COND_V_MSG(!E, Ref<Texture2D>(), "Animation '" + String(p_anim) + "' doesn't exist.");
+		ERR_FAIL_COND_V(p_idx < 0, Ref<Texture2D>());
 		if (p_idx >= E->get().frames.size())
-			return Ref<Texture>();
+			return Ref<Texture2D>();
 
 		return E->get().frames[p_idx];
 	}
 
-	_FORCE_INLINE_ Ref<Texture> get_normal_frame(const StringName &p_anim, int p_idx) const {
+	_FORCE_INLINE_ Ref<Texture2D> get_normal_frame(const StringName &p_anim, int p_idx) const {
 
 		const Map<StringName, Anim>::Element *E = animations.find(p_anim);
-		ERR_FAIL_COND_V(!E, Ref<Texture>());
-		ERR_FAIL_COND_V(p_idx < 0, Ref<Texture>());
+		ERR_FAIL_COND_V_MSG(!E, Ref<Texture2D>(), "Animation '" + String(p_anim) + "' doesn't exist.");
+		ERR_FAIL_COND_V(p_idx < 0, Ref<Texture2D>());
 
 		const Map<StringName, Anim>::Element *EN = animations.find(E->get().normal_name);
 
 		if (!EN || p_idx >= EN->get().frames.size())
-			return Ref<Texture>();
+			return Ref<Texture2D>();
 
 		return EN->get().frames[p_idx];
 	}
 
-	void set_frame(const StringName &p_anim, int p_idx, const Ref<Texture> &p_frame) {
+	_FORCE_INLINE_ Ref<Texture2D> get_specular_frame(const StringName &p_anim, int p_idx) const {
+
+		const Map<StringName, Anim>::Element *E = animations.find(p_anim);
+		ERR_FAIL_COND_V(!E, Ref<Texture2D>());
+		ERR_FAIL_COND_V(p_idx < 0, Ref<Texture2D>());
+
+		const Map<StringName, Anim>::Element *EN = animations.find(E->get().specular_name);
+
+		if (!EN || p_idx >= EN->get().frames.size())
+			return Ref<Texture2D>();
+
+		return EN->get().frames[p_idx];
+	}
+
+	void set_frame(const StringName &p_anim, int p_idx, const Ref<Texture2D> &p_frame) {
 		Map<StringName, Anim>::Element *E = animations.find(p_anim);
-		ERR_FAIL_COND(!E);
+		ERR_FAIL_COND_MSG(!E, "Animation '" + String(p_anim) + "' doesn't exist.");
 		ERR_FAIL_COND(p_idx < 0);
 		if (p_idx >= E->get().frames.size())
 			return;
-		E->get().frames[p_idx] = p_frame;
+		E->get().frames.write[p_idx] = p_frame;
 	}
 	void remove_frame(const StringName &p_anim, int p_idx);
 	void clear(const StringName &p_anim);
@@ -127,6 +146,7 @@ class AnimatedSprite : public Node2D {
 
 	Ref<SpriteFrames> frames;
 	bool playing;
+	bool backwards;
 	StringName animation;
 	int frame;
 	float speed_scale;
@@ -134,6 +154,7 @@ class AnimatedSprite : public Node2D {
 	bool centered;
 	Point2 offset;
 
+	bool is_over;
 	float timeout;
 
 	bool hflip;
@@ -145,6 +166,10 @@ class AnimatedSprite : public Node2D {
 	void _reset_timeout();
 	void _set_playing(bool p_playing);
 	bool _is_playing() const;
+	Rect2 _get_rect() const;
+
+	Color specular_color;
+	float shininess;
 
 protected:
 	static void _bind_methods();
@@ -152,6 +177,7 @@ protected:
 	virtual void _validate_property(PropertyInfo &property) const;
 
 public:
+#ifdef TOOLS_ENABLED
 	virtual Dictionary _edit_get_state() const;
 	virtual void _edit_set_state(const Dictionary &p_state);
 
@@ -160,11 +186,14 @@ public:
 	virtual bool _edit_use_pivot() const;
 	virtual Rect2 _edit_get_rect() const;
 	virtual bool _edit_use_rect() const;
+#endif
+
+	virtual Rect2 get_anchorable_rect() const;
 
 	void set_sprite_frames(const Ref<SpriteFrames> &p_frames);
 	Ref<SpriteFrames> get_sprite_frames() const;
 
-	void play(const StringName &p_animation = StringName());
+	void play(const StringName &p_animation = StringName(), const bool p_backwards = false);
 	void stop();
 	bool is_playing() const;
 
@@ -189,8 +218,11 @@ public:
 	void set_flip_v(bool p_flip);
 	bool is_flipped_v() const;
 
-	void set_modulate(const Color &p_color);
-	Color get_modulate() const;
+	void set_specular_color(const Color &p_color);
+	Color get_specular_color() const;
+
+	void set_shininess(float p_shininess);
+	float get_shininess() const;
 
 	virtual String get_configuration_warning() const;
 	AnimatedSprite();

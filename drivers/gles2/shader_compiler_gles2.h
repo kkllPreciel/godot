@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -27,15 +27,15 @@
 /* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
+
 #ifndef SHADERCOMPILERGLES2_H
 #define SHADERCOMPILERGLES2_H
 
-#include "pair.h"
+#include "core/pair.h"
+#include "core/string_builder.h"
 #include "servers/visual/shader_language.h"
 #include "servers/visual/shader_types.h"
 #include "servers/visual_server.h"
-
-#include "string_builder.h"
 
 class ShaderCompilerGLES2 {
 public:
@@ -54,6 +54,7 @@ public:
 		Vector<CharString> custom_defines;
 		Vector<StringName> uniforms;
 		Vector<StringName> texture_uniforms;
+		Vector<ShaderLanguage::DataType> texture_types;
 		Vector<ShaderLanguage::ShaderNode::Uniform::Hint> texture_hints;
 
 		String vertex_global;
@@ -98,4 +99,4 @@ public:
 	ShaderCompilerGLES2();
 };
 
-#endif // SHADERCOMPILERGLES3_H
+#endif // SHADERCOMPILERGLES2_H

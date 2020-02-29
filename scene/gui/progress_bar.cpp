@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -41,6 +41,9 @@ Size2 ProgressBar::get_minimum_size() const {
 	minimum_size.width = MAX(minimum_size.width, fg->get_minimum_size().width);
 	if (percent_visible) {
 		minimum_size.height = MAX(minimum_size.height, bg->get_minimum_size().height + font->get_height());
+	} else { // this is needed, else the progressbar will collapse
+		minimum_size.width = MAX(minimum_size.width, 1);
+		minimum_size.height = MAX(minimum_size.height, 1);
 	}
 	return minimum_size;
 }
@@ -57,7 +60,7 @@ void ProgressBar::_notification(int p_what) {
 		draw_style_box(bg, Rect2(Point2(), get_size()));
 		float r = get_as_ratio();
 		int mp = fg->get_minimum_size().width;
-		int p = r * get_size().width - mp;
+		int p = r * (get_size().width - mp);
 		if (p > 0) {
 
 			draw_style_box(fg, Rect2(Point2(), Size2(p + fg->get_minimum_size().width, get_size().height)));
@@ -92,5 +95,6 @@ void ProgressBar::_bind_methods() {
 ProgressBar::ProgressBar() {
 
 	set_v_size_flags(0);
+	set_step(0.01);
 	percent_visible = true;
 }

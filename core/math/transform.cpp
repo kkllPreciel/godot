@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -29,9 +29,10 @@
 /*************************************************************************/
 
 #include "transform.h"
-#include "math_funcs.h"
-#include "os/copymem.h"
-#include "print_string.h"
+
+#include "core/math/math_funcs.h"
+#include "core/os/copymem.h"
+#include "core/print_string.h"
 
 void Transform::affine_invert() {
 
@@ -120,19 +121,18 @@ Transform Transform::interpolate_with(const Transform &p_transform, real_t p_c) 
 	/* not sure if very "efficient" but good enough? */
 
 	Vector3 src_scale = basis.get_scale();
-	Quat src_rot = basis.orthonormalized();
+	Quat src_rot = basis.get_rotation_quat();
 	Vector3 src_loc = origin;
 
 	Vector3 dst_scale = p_transform.basis.get_scale();
-	Quat dst_rot = p_transform.basis;
+	Quat dst_rot = p_transform.basis.get_rotation_quat();
 	Vector3 dst_loc = p_transform.origin;
 
-	Transform dst; //this could be made faster by using a single function in Basis..
-	dst.basis = src_rot.slerp(dst_rot, p_c).normalized();
-	dst.basis.set_scale(src_scale.linear_interpolate(dst_scale, p_c));
-	dst.origin = src_loc.linear_interpolate(dst_loc, p_c);
+	Transform interp;
+	interp.basis.set_quat_scale(src_rot.slerp(dst_rot, p_c).normalized(), src_scale.linear_interpolate(dst_scale, p_c));
+	interp.origin = src_loc.linear_interpolate(dst_loc, p_c);
 
-	return dst;
+	return interp;
 }
 
 void Transform::scale(const Vector3 &p_scale) {
@@ -182,6 +182,11 @@ Transform Transform::orthonormalized() const {
 	return _copy;
 }
 
+bool Transform::is_equal_approx(const Transform &p_transform) const {
+
+	return basis.is_equal_approx(p_transform.basis) && origin.is_equal_approx(p_transform.origin);
+}
+
 bool Transform::operator==(const Transform &p_transform) const {
 
 	return (basis == p_transform.basis && origin == p_transform.origin);
@@ -212,4 +217,9 @@ Transform::operator String() const {
 Transform::Transform(const Basis &p_basis, const Vector3 &p_origin) :
 		basis(p_basis),
 		origin(p_origin) {
+}
+
+Transform::Transform(real_t xx, real_t xy, real_t xz, real_t yx, real_t yy, real_t yz, real_t zx, real_t zy, real_t zz, real_t ox, real_t oy, real_t oz) {
+	basis = Basis(xx, xy, xz, yx, yy, yz, zx, zy, zz);
+	origin = Vector3(ox, oy, oz);
 }

@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -30,11 +30,9 @@
 
 #include "audio_driver_jandroid.h"
 
-#include "os/os.h"
-#include "project_settings.h"
+#include "core/os/os.h"
+#include "core/project_settings.h"
 #include "thread_jandroid.h"
-
-#ifndef ANDROID_NATIVE_ACTIVITY
 
 AudioDriverAndroid *AudioDriverAndroid::s_ad = NULL;
 
@@ -50,7 +48,7 @@ int AudioDriverAndroid::mix_rate = 44100;
 bool AudioDriverAndroid::quit = false;
 jobject AudioDriverAndroid::audioBuffer = NULL;
 void *AudioDriverAndroid::audioBufferPinned = NULL;
-Mutex *AudioDriverAndroid::mutex = NULL;
+Mutex AudioDriverAndroid::mutex;
 int32_t *AudioDriverAndroid::audioBuffer32 = NULL;
 
 const char *AudioDriverAndroid::get_name() const {
@@ -60,7 +58,6 @@ const char *AudioDriverAndroid::get_name() const {
 
 Error AudioDriverAndroid::init() {
 
-	mutex = Mutex::create();
 	/*
 	// TODO: pass in/return a (Java) device ID, also whether we're opening for input or output
 	   this->spec.samples = Android_JNI_OpenAudioDevice(this->spec.freq, this->spec.format == AUDIO_U8 ? 0 : 1, this->spec.channels, this->spec.samples);
@@ -78,13 +75,11 @@ Error AudioDriverAndroid::init() {
 	//        __android_log_print(ANDROID_LOG_VERBOSE, "SDL", "SDL audio: opening device");
 
 	JNIEnv *env = ThreadAndroid::get_env();
-	int mix_rate = GLOBAL_DEF("audio/mix_rate", 44100);
+	int mix_rate = GLOBAL_DEF_RST("audio/mix_rate", 44100);
 
-	int latency = GLOBAL_DEF("audio/output_latency", 25);
+	int latency = GLOBAL_DEF_RST("audio/output_latency", 25);
 	unsigned int buffer_size = next_power_of_2(latency * mix_rate / 1000);
-	if (OS::get_singleton()->is_stdout_verbose()) {
-		print_line("audio buffer size: " + itos(buffer_size));
-	}
+	print_verbose("Audio buffer size: " + itos(buffer_size));
 
 	audioBuffer = env->CallObjectMethod(io, _init_audio, mix_rate, buffer_size);
 
@@ -137,7 +132,7 @@ void AudioDriverAndroid::thread_func(JNIEnv *env) {
 		int16_t *ptr = (int16_t *)audioBufferPinned;
 		int fc = audioBufferFrames;
 
-		if (!s_ad->active || mutex->try_lock() != OK) {
+		if (!s_ad->active || mutex.try_lock() != OK) {
 
 			for (int i = 0; i < fc; i++) {
 				ptr[i] = 0;
@@ -147,7 +142,7 @@ void AudioDriverAndroid::thread_func(JNIEnv *env) {
 
 			s_ad->audio_server_process(fc / 2, audioBuffer32);
 
-			mutex->unlock();
+			mutex.unlock();
 
 			for (int i = 0; i < fc; i++) {
 
@@ -171,14 +166,12 @@ AudioDriver::SpeakerMode AudioDriverAndroid::get_speaker_mode() const {
 
 void AudioDriverAndroid::lock() {
 
-	if (mutex)
-		mutex->lock();
+	mutex.lock();
 }
 
 void AudioDriverAndroid::unlock() {
 
-	if (mutex)
-		mutex->unlock();
+	mutex.unlock();
 }
 
 void AudioDriverAndroid::finish() {
@@ -206,5 +199,3 @@ AudioDriverAndroid::AudioDriverAndroid() {
 	s_ad = this;
 	active = false;
 }
-
-#endif

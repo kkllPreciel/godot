@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -31,21 +31,18 @@
 #ifndef MATERIAL_H
 #define MATERIAL_H
 
-#include "resource.h"
+#include "core/resource.h"
+#include "core/self_list.h"
 #include "scene/resources/shader.h"
 #include "scene/resources/texture.h"
-#include "self_list.h"
 #include "servers/visual/shader_language.h"
 #include "servers/visual_server.h"
-/**
-	@author Juan Linietsky <reduzio@gmail.com>
-*/
 
 class Material : public Resource {
 
-	GDCLASS(Material, Resource)
+	GDCLASS(Material, Resource);
 	RES_BASE_EXTENSION("material")
-	OBJ_SAVE_TYPE(Material)
+	OBJ_SAVE_TYPE(Material);
 
 	RID material;
 	Ref<Material> next_pass;
@@ -85,12 +82,16 @@ protected:
 	bool _set(const StringName &p_name, const Variant &p_value);
 	bool _get(const StringName &p_name, Variant &r_ret) const;
 	void _get_property_list(List<PropertyInfo> *p_list) const;
+	bool property_can_revert(const String &p_name);
+	Variant property_get_revert(const String &p_name);
 
 	static void _bind_methods();
 
 	void get_argument_options(const StringName &p_function, int p_idx, List<String> *r_options) const;
 
 	virtual bool _can_do_next_pass() const;
+
+	void _shader_changed();
 
 public:
 	void set_shader(const Ref<Shader> &p_shader);
@@ -105,9 +106,11 @@ public:
 	~ShaderMaterial();
 };
 
-class SpatialMaterial : public Material {
+class StandardMaterial3D;
 
-	GDCLASS(SpatialMaterial, Material)
+class BaseMaterial3D : public Material {
+
+	GDCLASS(BaseMaterial3D, Material);
 
 public:
 	enum TextureParam {
@@ -120,15 +123,26 @@ public:
 		TEXTURE_CLEARCOAT,
 		TEXTURE_FLOWMAP,
 		TEXTURE_AMBIENT_OCCLUSION,
-		TEXTURE_DEPTH,
+		TEXTURE_HEIGHTMAP,
 		TEXTURE_SUBSURFACE_SCATTERING,
 		TEXTURE_TRANSMISSION,
 		TEXTURE_REFRACTION,
 		TEXTURE_DETAIL_MASK,
 		TEXTURE_DETAIL_ALBEDO,
 		TEXTURE_DETAIL_NORMAL,
+		TEXTURE_ORM,
 		TEXTURE_MAX
 
+	};
+
+	enum TextureFilter {
+		TEXTURE_FILTER_NEAREST,
+		TEXTURE_FILTER_LINEAR,
+		TEXTURE_FILTER_NEAREST_WITH_MIPMAPS,
+		TEXTURE_FILTER_LINEAR_WITH_MIPMAPS,
+		TEXTURE_FILTER_NEAREST_WITH_MIPMAPS_ANISOTROPIC,
+		TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC,
+		TEXTURE_FILTER_MAX
 	};
 
 	enum DetailUV {
@@ -136,15 +150,29 @@ public:
 		DETAIL_UV_2
 	};
 
+	enum Transparency {
+		TRANSPARENCY_DISABLED,
+		TRANSPARENCY_ALPHA,
+		TRANSPARENCY_ALPHA_SCISSOR,
+		TRANSPARENCY_ALPHA_DEPTH_PRE_PASS,
+		TRANSPARENCY_MAX,
+	};
+
+	enum ShadingMode {
+		SHADING_MODE_UNSHADED,
+		SHADING_MODE_PER_PIXEL,
+		SHADING_MODE_PER_VERTEX,
+		SHADING_MODE_MAX
+	};
+
 	enum Feature {
-		FEATURE_TRANSPARENT,
 		FEATURE_EMISSION,
 		FEATURE_NORMAL_MAPPING,
 		FEATURE_RIM,
 		FEATURE_CLEARCOAT,
 		FEATURE_ANISOTROPY,
 		FEATURE_AMBIENT_OCCLUSION,
-		FEATURE_DEPTH_MAPPING,
+		FEATURE_HEIGHT_MAPPING,
 		FEATURE_SUBSURACE_SCATTERING,
 		FEATURE_TRANSMISSION,
 		FEATURE_REFRACTION,
@@ -163,8 +191,6 @@ public:
 		DEPTH_DRAW_OPAQUE_ONLY,
 		DEPTH_DRAW_ALWAYS,
 		DEPTH_DRAW_DISABLED,
-		DEPTH_DRAW_ALPHA_OPAQUE_PREPASS
-
 	};
 
 	enum CullMode {
@@ -174,21 +200,24 @@ public:
 	};
 
 	enum Flags {
-		FLAG_UNSHADED,
-		FLAG_USE_VERTEX_LIGHTING,
 		FLAG_DISABLE_DEPTH_TEST,
 		FLAG_ALBEDO_FROM_VERTEX_COLOR,
 		FLAG_SRGB_VERTEX_COLOR,
 		FLAG_USE_POINT_SIZE,
 		FLAG_FIXED_SIZE,
+		FLAG_BILLBOARD_KEEP_SCALE,
 		FLAG_UV1_USE_TRIPLANAR,
 		FLAG_UV2_USE_TRIPLANAR,
-		FLAG_TRIPLANAR_USE_WORLD,
+		FLAG_UV1_USE_WORLD_TRIPLANAR,
+		FLAG_UV2_USE_WORLD_TRIPLANAR,
 		FLAG_AO_ON_UV2,
 		FLAG_EMISSION_ON_UV2,
-		FLAG_USE_ALPHA_SCISSOR,
 		FLAG_ALBEDO_TEXTURE_FORCE_SRGB,
 		FLAG_DONT_RECEIVE_SHADOWS,
+		FLAG_DISABLE_AMBIENT_LIGHT,
+		FLAG_USE_SHADOW_TO_OPACITY,
+		FLAG_USE_TEXTURE_REPEAT,
+		FLAG_INVERT_HEIGHTMAP,
 		FLAG_MAX
 	};
 
@@ -228,26 +257,37 @@ public:
 		EMISSION_OP_MULTIPLY
 	};
 
+	enum DistanceFadeMode {
+		DISTANCE_FADE_DISABLED,
+		DISTANCE_FADE_PIXEL_ALPHA,
+		DISTANCE_FADE_PIXEL_DITHER,
+		DISTANCE_FADE_OBJECT_DITHER,
+	};
+
 private:
 	union MaterialKey {
 
 		struct {
-			uint64_t feature_mask : 12;
+			uint64_t feature_mask : FEATURE_MAX;
 			uint64_t detail_uv : 1;
 			uint64_t blend_mode : 2;
 			uint64_t depth_draw_mode : 2;
 			uint64_t cull_mode : 2;
-			uint64_t flags : 15;
+			uint64_t flags : FLAG_MAX;
 			uint64_t detail_blend_mode : 2;
 			uint64_t diffuse_mode : 3;
-			uint64_t specular_mode : 2;
+			uint64_t specular_mode : 3;
 			uint64_t invalid_key : 1;
 			uint64_t deep_parallax : 1;
 			uint64_t billboard_mode : 2;
 			uint64_t grow : 1;
 			uint64_t proximity_fade : 1;
-			uint64_t distance_fade : 1;
+			uint64_t distance_fade : 2;
 			uint64_t emission_op : 1;
+			uint64_t texture_filter : 3;
+			uint64_t transparency : 2;
+			uint64_t shading_mode : 2;
+			uint64_t roughness_channel : 3;
 		};
 
 		uint64_t key;
@@ -272,16 +312,20 @@ private:
 		mk.key = 0;
 		for (int i = 0; i < FEATURE_MAX; i++) {
 			if (features[i]) {
-				mk.feature_mask |= (1 << i);
+				mk.feature_mask |= ((uint64_t)1 << i);
 			}
 		}
 		mk.detail_uv = detail_uv;
 		mk.blend_mode = blend_mode;
 		mk.depth_draw_mode = depth_draw_mode;
 		mk.cull_mode = cull_mode;
+		mk.texture_filter = texture_filter;
+		mk.transparency = transparency;
+		mk.shading_mode = shading_mode;
+		mk.roughness_channel = roughness_texture_channel;
 		for (int i = 0; i < FLAG_MAX; i++) {
 			if (flags[i]) {
-				mk.flags |= (1 << i);
+				mk.flags |= ((uint64_t)1 << i);
 			}
 		}
 		mk.detail_blend_mode = detail_blend_mode;
@@ -291,7 +335,7 @@ private:
 		mk.deep_parallax = deep_parallax ? 1 : 0;
 		mk.grow = grow_enabled;
 		mk.proximity_fade = proximity_fade_enabled;
-		mk.distance_fade = distance_fade_enabled;
+		mk.distance_fade = distance_fade;
 		mk.emission_op = emission_op;
 
 		return mk;
@@ -310,7 +354,7 @@ private:
 		StringName clearcoat;
 		StringName clearcoat_gloss;
 		StringName anisotropy;
-		StringName depth_scale;
+		StringName heightmap_scale;
 		StringName subsurface_scattering_strength;
 		StringName transmission;
 		StringName refraction;
@@ -322,8 +366,9 @@ private:
 		StringName particles_anim_h_frames;
 		StringName particles_anim_v_frames;
 		StringName particles_anim_loop;
-		StringName depth_min_layers;
-		StringName depth_max_layers;
+		StringName heightmap_min_layers;
+		StringName heightmap_max_layers;
+		StringName heightmap_flip;
 		StringName uv1_blend_sharpness;
 		StringName uv2_blend_sharpness;
 		StringName grow;
@@ -333,26 +378,27 @@ private:
 		StringName ao_light_affect;
 
 		StringName metallic_texture_channel;
-		StringName roughness_texture_channel;
 		StringName ao_texture_channel;
 		StringName clearcoat_texture_channel;
 		StringName rim_texture_channel;
-		StringName depth_texture_channel;
+		StringName heightmap_texture_channel;
 		StringName refraction_texture_channel;
 		StringName alpha_scissor_threshold;
 
 		StringName texture_names[TEXTURE_MAX];
 	};
 
-	static Mutex *material_mutex;
-	static SelfList<SpatialMaterial>::List dirty_materials;
+	static Mutex material_mutex;
+	static SelfList<BaseMaterial3D>::List *dirty_materials;
 	static ShaderNames *shader_names;
 
-	SelfList<SpatialMaterial> element;
+	SelfList<BaseMaterial3D> element;
 
 	void _update_shader();
 	_FORCE_INLINE_ void _queue_shader_change();
 	_FORCE_INLINE_ bool _is_shader_dirty() const;
+
+	bool orm;
 
 	Color albedo;
 	float specular;
@@ -366,11 +412,10 @@ private:
 	float clearcoat;
 	float clearcoat_gloss;
 	float anisotropy;
-	float depth_scale;
+	float heightmap_scale;
 	float subsurface_scattering_strength;
 	Color transmission;
 	float refraction;
-	float line_width;
 	float point_size;
 	float alpha_scissor_threshold;
 	bool grow_enabled;
@@ -379,6 +424,10 @@ private:
 	int particles_anim_h_frames;
 	int particles_anim_v_frames;
 	bool particles_anim_loop;
+	Transparency transparency;
+	ShadingMode shading_mode;
+
+	TextureFilter texture_filter;
 
 	Vector3 uv1_scale;
 	Vector3 uv1_offset;
@@ -393,11 +442,13 @@ private:
 	bool deep_parallax;
 	int deep_parallax_min_layers;
 	int deep_parallax_max_layers;
+	bool heightmap_parallax_flip_tangent;
+	bool heightmap_parallax_flip_binormal;
 
 	bool proximity_fade_enabled;
 	float proximity_fade_distance;
 
-	bool distance_fade_enabled;
+	DistanceFadeMode distance_fade;
 	float distance_fade_max_distance;
 	float distance_fade_min_distance;
 
@@ -418,15 +469,15 @@ private:
 
 	bool features[FEATURE_MAX];
 
-	Ref<Texture> textures[TEXTURE_MAX];
+	Ref<Texture2D> textures[TEXTURE_MAX];
 
 	_FORCE_INLINE_ void _validate_feature(const String &text, Feature feature, PropertyInfo &property) const;
 
-	enum {
-		MAX_MATERIALS_FOR_2D = 32
-	};
+	static const int MAX_MATERIALS_FOR_2D = 128;
 
-	static Ref<SpatialMaterial> materials_for_2d[MAX_MATERIALS_FOR_2D]; //used by Sprite3D and other stuff
+	static Ref<StandardMaterial3D> materials_for_2d[MAX_MATERIALS_FOR_2D]; //used by Sprite3D and other stuff
+
+	void _validate_high_end(const String &text, PropertyInfo &property) const;
 
 protected:
 	static void _bind_methods();
@@ -473,17 +524,23 @@ public:
 	void set_anisotropy(float p_anisotropy);
 	float get_anisotropy() const;
 
-	void set_depth_scale(float p_depth_scale);
-	float get_depth_scale() const;
+	void set_heightmap_scale(float p_heightmap_scale);
+	float get_heightmap_scale() const;
 
-	void set_depth_deep_parallax(bool p_enable);
-	bool is_depth_deep_parallax_enabled() const;
+	void set_heightmap_deep_parallax(bool p_enable);
+	bool is_heightmap_deep_parallax_enabled() const;
 
-	void set_depth_deep_parallax_min_layers(int p_layer);
-	int get_depth_deep_parallax_min_layers() const;
+	void set_heightmap_deep_parallax_min_layers(int p_layer);
+	int get_heightmap_deep_parallax_min_layers() const;
 
-	void set_depth_deep_parallax_max_layers(int p_layer);
-	int get_depth_deep_parallax_max_layers() const;
+	void set_heightmap_deep_parallax_max_layers(int p_layer);
+	int get_heightmap_deep_parallax_max_layers() const;
+
+	void set_heightmap_deep_parallax_flip_tangent(bool p_flip);
+	bool get_heightmap_deep_parallax_flip_tangent() const;
+
+	void set_heightmap_deep_parallax_flip_binormal(bool p_flip);
+	bool get_heightmap_deep_parallax_flip_binormal() const;
 
 	void set_subsurface_scattering_strength(float p_subsurface_scattering_strength);
 	float get_subsurface_scattering_strength() const;
@@ -494,11 +551,14 @@ public:
 	void set_refraction(float p_refraction);
 	float get_refraction() const;
 
-	void set_line_width(float p_line_width);
-	float get_line_width() const;
-
 	void set_point_size(float p_point_size);
 	float get_point_size() const;
+
+	void set_transparency(Transparency p_transparency);
+	Transparency get_transparency() const;
+
+	void set_shading_mode(ShadingMode p_shading_mode);
+	ShadingMode get_shading_mode() const;
 
 	void set_detail_uv(DetailUV p_detail_uv);
 	DetailUV get_detail_uv() const;
@@ -524,10 +584,13 @@ public:
 	void set_flag(Flags p_flag, bool p_enabled);
 	bool get_flag(Flags p_flag) const;
 
-	void set_texture(TextureParam p_param, const Ref<Texture> &p_texture);
-	Ref<Texture> get_texture(TextureParam p_param) const;
+	void set_texture(TextureParam p_param, const Ref<Texture2D> &p_texture);
+	Ref<Texture2D> get_texture(TextureParam p_param) const;
 	// Used only for shader material conversion
-	Ref<Texture> get_texture_by_name(StringName p_name) const;
+	Ref<Texture2D> get_texture_by_name(StringName p_name) const;
+
+	void set_texture_filter(TextureFilter p_filter);
+	TextureFilter get_texture_filter() const;
 
 	void set_feature(Feature p_feature, bool p_enabled);
 	bool get_feature(Feature p_feature) const;
@@ -558,8 +621,8 @@ public:
 	void set_particles_anim_v_frames(int p_frames);
 	int get_particles_anim_v_frames() const;
 
-	void set_particles_anim_loop(int p_frames);
-	int get_particles_anim_loop() const;
+	void set_particles_anim_loop(bool p_loop);
+	bool get_particles_anim_loop() const;
 
 	void set_grow_enabled(bool p_enable);
 	bool is_grow_enabled() const;
@@ -578,8 +641,8 @@ public:
 	void set_proximity_fade_distance(float p_distance);
 	float get_proximity_fade_distance() const;
 
-	void set_distance_fade(bool p_enable);
-	bool is_distance_fade_enabled() const;
+	void set_distance_fade(DistanceFadeMode p_mode);
+	DistanceFadeMode get_distance_fade() const;
 
 	void set_distance_fade_max_distance(float p_distance);
 	float get_distance_fade_max_distance() const;
@@ -603,28 +666,52 @@ public:
 	static void finish_shaders();
 	static void flush_changes();
 
-	static RID get_material_rid_for_2d(bool p_shaded, bool p_transparent, bool p_double_sided, bool p_cut_alpha, bool p_opaque_prepass);
+	static RID get_material_rid_for_2d(bool p_shaded, bool p_transparent, bool p_double_sided, bool p_cut_alpha, bool p_opaque_prepass, bool p_billboard = false, bool p_billboard_y = false);
 
 	RID get_shader_rid() const;
 
 	virtual Shader::Mode get_shader_mode() const;
 
-	SpatialMaterial();
-	virtual ~SpatialMaterial();
+	BaseMaterial3D(bool p_orm);
+	virtual ~BaseMaterial3D();
 };
 
-VARIANT_ENUM_CAST(SpatialMaterial::TextureParam)
-VARIANT_ENUM_CAST(SpatialMaterial::DetailUV)
-VARIANT_ENUM_CAST(SpatialMaterial::Feature)
-VARIANT_ENUM_CAST(SpatialMaterial::BlendMode)
-VARIANT_ENUM_CAST(SpatialMaterial::DepthDrawMode)
-VARIANT_ENUM_CAST(SpatialMaterial::CullMode)
-VARIANT_ENUM_CAST(SpatialMaterial::Flags)
-VARIANT_ENUM_CAST(SpatialMaterial::DiffuseMode)
-VARIANT_ENUM_CAST(SpatialMaterial::SpecularMode)
-VARIANT_ENUM_CAST(SpatialMaterial::BillboardMode)
-VARIANT_ENUM_CAST(SpatialMaterial::TextureChannel)
-VARIANT_ENUM_CAST(SpatialMaterial::EmissionOperator)
+VARIANT_ENUM_CAST(BaseMaterial3D::TextureParam)
+VARIANT_ENUM_CAST(BaseMaterial3D::TextureFilter)
+VARIANT_ENUM_CAST(BaseMaterial3D::ShadingMode)
+VARIANT_ENUM_CAST(BaseMaterial3D::Transparency)
+VARIANT_ENUM_CAST(BaseMaterial3D::DetailUV)
+VARIANT_ENUM_CAST(BaseMaterial3D::Feature)
+VARIANT_ENUM_CAST(BaseMaterial3D::BlendMode)
+VARIANT_ENUM_CAST(BaseMaterial3D::DepthDrawMode)
+VARIANT_ENUM_CAST(BaseMaterial3D::CullMode)
+VARIANT_ENUM_CAST(BaseMaterial3D::Flags)
+VARIANT_ENUM_CAST(BaseMaterial3D::DiffuseMode)
+VARIANT_ENUM_CAST(BaseMaterial3D::SpecularMode)
+VARIANT_ENUM_CAST(BaseMaterial3D::BillboardMode)
+VARIANT_ENUM_CAST(BaseMaterial3D::TextureChannel)
+VARIANT_ENUM_CAST(BaseMaterial3D::EmissionOperator)
+VARIANT_ENUM_CAST(BaseMaterial3D::DistanceFadeMode)
+
+class StandardMaterial3D : public BaseMaterial3D {
+	GDCLASS(StandardMaterial3D, BaseMaterial3D)
+protected:
+#ifndef DISABLE_DEPRECATED
+	// Kept for compatibility from 3.x to 4.0.
+	bool _set(const StringName &p_name, const Variant &p_value);
+#endif
+
+public:
+	StandardMaterial3D() :
+			BaseMaterial3D(false) {}
+};
+
+class ORMMaterial3D : public BaseMaterial3D {
+	GDCLASS(ORMMaterial3D, BaseMaterial3D)
+public:
+	ORMMaterial3D() :
+			BaseMaterial3D(true) {}
+};
 
 //////////////////////
 

@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -30,7 +30,8 @@
 
 #include "item_list_editor_plugin.h"
 
-#include "io/resource_loader.h"
+#include "core/io/resource_loader.h"
+#include "editor/editor_scale.h"
 
 bool ItemListPlugin::_set(const StringName &p_name, const Variant &p_value) {
 
@@ -104,12 +105,12 @@ void ItemListPlugin::_get_property_list(List<PropertyInfo> *p_list) const {
 		String base = itos(i) + "/";
 
 		p_list->push_back(PropertyInfo(Variant::STRING, base + "text"));
-		p_list->push_back(PropertyInfo(Variant::OBJECT, base + "icon", PROPERTY_HINT_RESOURCE_TYPE, "Texture"));
+		p_list->push_back(PropertyInfo(Variant::OBJECT, base + "icon", PROPERTY_HINT_RESOURCE_TYPE, "Texture2D"));
 
 		int flags = get_flags();
 
 		if (flags & FLAG_CHECKABLE) {
-			p_list->push_back(PropertyInfo(Variant::BOOL, base + "checkable", PROPERTY_HINT_ENUM, "No,As checkbox,As radio button"));
+			p_list->push_back(PropertyInfo(Variant::INT, base + "checkable", PROPERTY_HINT_ENUM, "No,As checkbox,As radio button"));
 			p_list->push_back(PropertyInfo(Variant::BOOL, base + "checked"));
 		}
 
@@ -265,6 +266,9 @@ void ItemListEditor::_notification(int p_notification) {
 
 		add_button->set_icon(get_icon("Add", "EditorIcons"));
 		del_button->set_icon(get_icon("Remove", "EditorIcons"));
+	} else if (p_notification == NOTIFICATION_READY) {
+
+		get_tree()->connect("node_removed", callable_mp(this, &ItemListEditor::_node_removed));
 	}
 }
 
@@ -278,25 +282,27 @@ void ItemListEditor::_add_pressed() {
 
 void ItemListEditor::_delete_pressed() {
 
-	TreeItem *ti = tree->get_selected();
-
-	if (!ti)
-		return;
-
-	if (ti->get_parent() != tree->get_root())
-		return;
-
-	int idx = ti->get_text(0).to_int();
-
 	if (selected_idx == -1)
 		return;
+
+	String current_selected = (String)property_editor->get_selected_path();
+
+	if (current_selected == "")
+		return;
+
+	// FIXME: Currently relying on selecting a *property* to derive what item to delete
+	// e.g. you select "1/enabled" to delete item 1.
+	// This should be fixed so that you can delete by selecting the item section header,
+	// or a delete button on that header.
+
+	int idx = current_selected.get_slice("/", 0).to_int();
 
 	item_plugins[selected_idx]->erase(idx);
 }
 
 void ItemListEditor::_edit_items() {
 
-	dialog->popup_centered(Vector2(300, 400));
+	dialog->popup_centered_clamped(Vector2(425, 1200) * EDSCALE, 0.8);
 }
 
 void ItemListEditor::edit(Node *p_item_list) {
@@ -315,10 +321,7 @@ void ItemListEditor::edit(Node *p_item_list) {
 			item_plugins[i]->set_object(p_item_list);
 			property_editor->edit(item_plugins[i]);
 
-			if (has_icon(item_list->get_class(), "EditorIcons"))
-				toolbar_button->set_icon(get_icon(item_list->get_class(), "EditorIcons"));
-			else
-				toolbar_button->set_icon(Ref<Texture>());
+			toolbar_button->set_icon(EditorNode::get_singleton()->get_object_icon(item_list, ""));
 
 			selected_idx = i;
 			return;
@@ -341,22 +344,17 @@ bool ItemListEditor::handles(Object *p_object) const {
 }
 
 void ItemListEditor::_bind_methods() {
-
-	ClassDB::bind_method("_edit_items", &ItemListEditor::_edit_items);
-	ClassDB::bind_method("_add_button", &ItemListEditor::_add_pressed);
-	ClassDB::bind_method("_delete_button", &ItemListEditor::_delete_pressed);
 }
 
 ItemListEditor::ItemListEditor() {
 
 	selected_idx = -1;
-
-	add_child(memnew(VSeparator));
+	item_list = NULL;
 
 	toolbar_button = memnew(ToolButton);
 	toolbar_button->set_text(TTR("Items"));
 	add_child(toolbar_button);
-	toolbar_button->connect("pressed", this, "_edit_items");
+	toolbar_button->connect("pressed", callable_mp(this, &ItemListEditor::_edit_items));
 
 	dialog = memnew(AcceptDialog);
 	dialog->set_title(TTR("Item List Editor"));
@@ -373,22 +371,18 @@ ItemListEditor::ItemListEditor() {
 	add_button = memnew(Button);
 	add_button->set_text(TTR("Add"));
 	hbc->add_child(add_button);
-	add_button->connect("pressed", this, "_add_button");
+	add_button->connect("pressed", callable_mp(this, &ItemListEditor::_add_pressed));
 
 	hbc->add_spacer();
 
 	del_button = memnew(Button);
 	del_button->set_text(TTR("Delete"));
 	hbc->add_child(del_button);
-	del_button->connect("pressed", this, "_delete_button");
+	del_button->connect("pressed", callable_mp(this, &ItemListEditor::_delete_pressed));
 
-	property_editor = memnew(PropertyEditor);
-	property_editor->hide_top_label();
-	property_editor->set_subsection_selectable(true);
+	property_editor = memnew(EditorInspector);
 	vbc->add_child(property_editor);
 	property_editor->set_v_size_flags(SIZE_EXPAND_FILL);
-
-	tree = property_editor->get_property_tree();
 }
 
 ItemListEditor::~ItemListEditor() {

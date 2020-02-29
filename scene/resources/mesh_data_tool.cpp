@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -42,14 +42,12 @@ void MeshDataTool::clear() {
 Error MeshDataTool::create_from_surface(const Ref<ArrayMesh> &p_mesh, int p_surface) {
 
 	ERR_FAIL_COND_V(p_mesh.is_null(), ERR_INVALID_PARAMETER);
-
-	ERR_FAIL_COND_V(p_mesh.is_null(), ERR_INVALID_PARAMETER);
 	ERR_FAIL_COND_V(p_mesh->surface_get_primitive_type(p_surface) != Mesh::PRIMITIVE_TRIANGLES, ERR_INVALID_PARAMETER);
 
 	Array arrays = p_mesh->surface_get_arrays(p_surface);
 	ERR_FAIL_COND_V(arrays.empty(), ERR_INVALID_PARAMETER);
 
-	PoolVector<Vector3> varray = arrays[Mesh::ARRAY_VERTEX];
+	Vector<Vector3> varray = arrays[Mesh::ARRAY_VERTEX];
 
 	int vcount = varray.size();
 	ERR_FAIL_COND_V(vcount == 0, ERR_INVALID_PARAMETER);
@@ -58,34 +56,34 @@ Error MeshDataTool::create_from_surface(const Ref<ArrayMesh> &p_mesh, int p_surf
 	format = p_mesh->surface_get_format(p_surface);
 	material = p_mesh->surface_get_material(p_surface);
 
-	PoolVector<Vector3>::Read vr = varray.read();
+	const Vector3 *vr = varray.ptr();
 
-	PoolVector<Vector3>::Read nr;
+	const Vector3 *nr;
 	if (arrays[Mesh::ARRAY_NORMAL].get_type() != Variant::NIL)
-		nr = arrays[Mesh::ARRAY_NORMAL].operator PoolVector<Vector3>().read();
+		nr = arrays[Mesh::ARRAY_NORMAL].operator Vector<Vector3>().ptr();
 
-	PoolVector<real_t>::Read ta;
+	const real_t *ta;
 	if (arrays[Mesh::ARRAY_TANGENT].get_type() != Variant::NIL)
-		ta = arrays[Mesh::ARRAY_TANGENT].operator PoolVector<real_t>().read();
+		ta = arrays[Mesh::ARRAY_TANGENT].operator Vector<real_t>().ptr();
 
-	PoolVector<Vector2>::Read uv;
+	const Vector2 *uv;
 	if (arrays[Mesh::ARRAY_TEX_UV].get_type() != Variant::NIL)
-		uv = arrays[Mesh::ARRAY_TEX_UV].operator PoolVector<Vector2>().read();
-	PoolVector<Vector2>::Read uv2;
+		uv = arrays[Mesh::ARRAY_TEX_UV].operator Vector<Vector2>().ptr();
+	const Vector2 *uv2;
 	if (arrays[Mesh::ARRAY_TEX_UV2].get_type() != Variant::NIL)
-		uv2 = arrays[Mesh::ARRAY_TEX_UV2].operator PoolVector<Vector2>().read();
+		uv2 = arrays[Mesh::ARRAY_TEX_UV2].operator Vector<Vector2>().ptr();
 
-	PoolVector<Color>::Read col;
+	const Color *col;
 	if (arrays[Mesh::ARRAY_COLOR].get_type() != Variant::NIL)
-		col = arrays[Mesh::ARRAY_COLOR].operator PoolVector<Color>().read();
+		col = arrays[Mesh::ARRAY_COLOR].operator Vector<Color>().ptr();
 
-	PoolVector<real_t>::Read bo;
+	const int *bo;
 	if (arrays[Mesh::ARRAY_BONES].get_type() != Variant::NIL)
-		bo = arrays[Mesh::ARRAY_BONES].operator PoolVector<real_t>().read();
+		bo = arrays[Mesh::ARRAY_BONES].operator Vector<int>().ptr();
 
-	PoolVector<real_t>::Read we;
+	const real_t *we;
 	if (arrays[Mesh::ARRAY_WEIGHTS].get_type() != Variant::NIL)
-		we = arrays[Mesh::ARRAY_WEIGHTS].operator PoolVector<real_t>().read();
+		we = arrays[Mesh::ARRAY_WEIGHTS].operator Vector<real_t>().ptr();
 
 	vertices.resize(vcount);
 
@@ -93,18 +91,18 @@ Error MeshDataTool::create_from_surface(const Ref<ArrayMesh> &p_mesh, int p_surf
 
 		Vertex v;
 		v.vertex = vr[i];
-		if (nr.ptr())
+		if (nr)
 			v.normal = nr[i];
-		if (ta.ptr())
+		if (ta)
 			v.tangent = Plane(ta[i * 4 + 0], ta[i * 4 + 1], ta[i * 4 + 2], ta[i * 4 + 3]);
-		if (uv.ptr())
+		if (uv)
 			v.uv = uv[i];
-		if (uv2.ptr())
+		if (uv2)
 			v.uv2 = uv2[i];
-		if (col.ptr())
+		if (col)
 			v.color = col[i];
 
-		if (we.ptr()) {
+		if (we) {
 
 			v.weights.push_back(we[i * 4 + 0]);
 			v.weights.push_back(we[i * 4 + 1]);
@@ -112,7 +110,7 @@ Error MeshDataTool::create_from_surface(const Ref<ArrayMesh> &p_mesh, int p_surf
 			v.weights.push_back(we[i * 4 + 3]);
 		}
 
-		if (bo.ptr()) {
+		if (bo) {
 
 			v.bones.push_back(bo[i * 4 + 0]);
 			v.bones.push_back(bo[i * 4 + 1]);
@@ -120,10 +118,10 @@ Error MeshDataTool::create_from_surface(const Ref<ArrayMesh> &p_mesh, int p_surf
 			v.bones.push_back(bo[i * 4 + 3]);
 		}
 
-		vertices[i] = v;
+		vertices.write[i] = v;
 	}
 
-	PoolVector<int> indices;
+	Vector<int> indices;
 
 	if (arrays[Mesh::ARRAY_INDEX].get_type() != Variant::NIL) {
 
@@ -131,19 +129,19 @@ Error MeshDataTool::create_from_surface(const Ref<ArrayMesh> &p_mesh, int p_surf
 	} else {
 		//make code simpler
 		indices.resize(vcount);
-		PoolVector<int>::Write iw = indices.write();
+		int *iw = indices.ptrw();
 		for (int i = 0; i < vcount; i++)
 			iw[i] = i;
 	}
 
 	int icount = indices.size();
-	PoolVector<int>::Read r = indices.read();
+	const int *r = indices.ptr();
 
 	Map<Point2i, int> edge_indices;
 
 	for (int i = 0; i < icount; i += 3) {
 
-		Vertex *v[3] = { &vertices[r[i + 0]], &vertices[r[i + 1]], &vertices[r[i + 2]] };
+		Vertex *v[3] = { &vertices.write[r[i + 0]], &vertices.write[r[i + 1]], &vertices.write[r[i + 2]] };
 
 		int fidx = faces.size();
 		Face face;
@@ -167,11 +165,12 @@ Error MeshDataTool::create_from_surface(const Ref<ArrayMesh> &p_mesh, int p_surf
 				e.vertex[0] = edge.x;
 				e.vertex[1] = edge.y;
 				edges.push_back(e);
+				v[j]->edges.push_back(face.edges[j]);
+				v[(j + 1) % 3]->edges.push_back(face.edges[j]);
 			}
 
-			edges[face.edges[j]].faces.push_back(fidx);
+			edges.write[face.edges[j]].faces.push_back(fidx);
 			v[j]->faces.push_back(fidx);
-			v[j]->edges.push_back(face.edges[j]);
 		}
 
 		faces.push_back(face);
@@ -188,84 +187,84 @@ Error MeshDataTool::commit_to_surface(const Ref<ArrayMesh> &p_mesh) {
 
 	int vcount = vertices.size();
 
-	PoolVector<Vector3> v;
-	PoolVector<Vector3> n;
-	PoolVector<real_t> t;
-	PoolVector<Vector2> u;
-	PoolVector<Vector2> u2;
-	PoolVector<Color> c;
-	PoolVector<real_t> b;
-	PoolVector<real_t> w;
-	PoolVector<int> in;
+	Vector<Vector3> v;
+	Vector<Vector3> n;
+	Vector<real_t> t;
+	Vector<Vector2> u;
+	Vector<Vector2> u2;
+	Vector<Color> c;
+	Vector<int> b;
+	Vector<real_t> w;
+	Vector<int> in;
 
 	{
 
 		v.resize(vcount);
-		PoolVector<Vector3>::Write vr = v.write();
+		Vector3 *vr = v.ptrw();
 
-		PoolVector<Vector3>::Write nr;
+		Vector3 *nr;
 		if (format & Mesh::ARRAY_FORMAT_NORMAL) {
 			n.resize(vcount);
-			nr = n.write();
+			nr = n.ptrw();
 		}
 
-		PoolVector<real_t>::Write ta;
+		real_t *ta;
 		if (format & Mesh::ARRAY_FORMAT_TANGENT) {
 			t.resize(vcount * 4);
-			ta = t.write();
+			ta = t.ptrw();
 		}
 
-		PoolVector<Vector2>::Write uv;
+		Vector2 *uv;
 		if (format & Mesh::ARRAY_FORMAT_TEX_UV) {
 			u.resize(vcount);
-			uv = u.write();
+			uv = u.ptrw();
 		}
 
-		PoolVector<Vector2>::Write uv2;
+		Vector2 *uv2;
 		if (format & Mesh::ARRAY_FORMAT_TEX_UV2) {
 			u2.resize(vcount);
-			uv2 = u2.write();
+			uv2 = u2.ptrw();
 		}
 
-		PoolVector<Color>::Write col;
+		Color *col;
 		if (format & Mesh::ARRAY_FORMAT_COLOR) {
 			c.resize(vcount);
-			col = c.write();
+			col = c.ptrw();
 		}
 
-		PoolVector<real_t>::Write bo;
+		int *bo;
 		if (format & Mesh::ARRAY_FORMAT_BONES) {
 			b.resize(vcount * 4);
-			bo = b.write();
+			bo = b.ptrw();
 		}
 
-		PoolVector<real_t>::Write we;
+		real_t *we;
 		if (format & Mesh::ARRAY_FORMAT_WEIGHTS) {
 			w.resize(vcount * 4);
-			we = w.write();
+			we = w.ptrw();
 		}
 
 		for (int i = 0; i < vcount; i++) {
 
-			Vertex &vtx = vertices[i];
+			const Vertex &vtx = vertices[i];
 
 			vr[i] = vtx.vertex;
-			if (nr.ptr())
+			if (nr)
 				nr[i] = vtx.normal;
-			if (ta.ptr()) {
+			if (ta) {
 				ta[i * 4 + 0] = vtx.tangent.normal.x;
 				ta[i * 4 + 1] = vtx.tangent.normal.y;
 				ta[i * 4 + 2] = vtx.tangent.normal.z;
 				ta[i * 4 + 3] = vtx.tangent.d;
 			}
-			if (uv.ptr())
+			if (uv)
 				uv[i] = vtx.uv;
-			if (uv2.ptr())
+			if (uv2)
 				uv2[i] = vtx.uv2;
-			if (col.ptr())
+			if (col)
 				col[i] = vtx.color;
 
-			if (we.ptr()) {
+			if (we) {
 
 				we[i * 4 + 0] = vtx.weights[0];
 				we[i * 4 + 1] = vtx.weights[1];
@@ -273,7 +272,7 @@ Error MeshDataTool::commit_to_surface(const Ref<ArrayMesh> &p_mesh) {
 				we[i * 4 + 3] = vtx.weights[3];
 			}
 
-			if (bo.ptr()) {
+			if (bo) {
 
 				bo[i * 4 + 0] = vtx.bones[0];
 				bo[i * 4 + 1] = vtx.bones[1];
@@ -284,7 +283,7 @@ Error MeshDataTool::commit_to_surface(const Ref<ArrayMesh> &p_mesh) {
 
 		int fc = faces.size();
 		in.resize(fc * 3);
-		PoolVector<int>::Write iw = in.write();
+		int *iw = in.ptrw();
 		for (int i = 0; i < fc; i++) {
 
 			iw[i * 3 + 0] = faces[i].v[0];
@@ -344,7 +343,7 @@ Vector3 MeshDataTool::get_vertex(int p_idx) const {
 void MeshDataTool::set_vertex(int p_idx, const Vector3 &p_vertex) {
 
 	ERR_FAIL_INDEX(p_idx, vertices.size());
-	vertices[p_idx].vertex = p_vertex;
+	vertices.write[p_idx].vertex = p_vertex;
 }
 
 Vector3 MeshDataTool::get_vertex_normal(int p_idx) const {
@@ -355,7 +354,7 @@ Vector3 MeshDataTool::get_vertex_normal(int p_idx) const {
 void MeshDataTool::set_vertex_normal(int p_idx, const Vector3 &p_normal) {
 
 	ERR_FAIL_INDEX(p_idx, vertices.size());
-	vertices[p_idx].normal = p_normal;
+	vertices.write[p_idx].normal = p_normal;
 	format |= Mesh::ARRAY_FORMAT_NORMAL;
 }
 
@@ -367,7 +366,7 @@ Plane MeshDataTool::get_vertex_tangent(int p_idx) const {
 void MeshDataTool::set_vertex_tangent(int p_idx, const Plane &p_tangent) {
 
 	ERR_FAIL_INDEX(p_idx, vertices.size());
-	vertices[p_idx].tangent = p_tangent;
+	vertices.write[p_idx].tangent = p_tangent;
 	format |= Mesh::ARRAY_FORMAT_TANGENT;
 }
 
@@ -379,7 +378,7 @@ Vector2 MeshDataTool::get_vertex_uv(int p_idx) const {
 void MeshDataTool::set_vertex_uv(int p_idx, const Vector2 &p_uv) {
 
 	ERR_FAIL_INDEX(p_idx, vertices.size());
-	vertices[p_idx].uv = p_uv;
+	vertices.write[p_idx].uv = p_uv;
 	format |= Mesh::ARRAY_FORMAT_TEX_UV;
 }
 
@@ -391,7 +390,7 @@ Vector2 MeshDataTool::get_vertex_uv2(int p_idx) const {
 void MeshDataTool::set_vertex_uv2(int p_idx, const Vector2 &p_uv2) {
 
 	ERR_FAIL_INDEX(p_idx, vertices.size());
-	vertices[p_idx].uv2 = p_uv2;
+	vertices.write[p_idx].uv2 = p_uv2;
 	format |= Mesh::ARRAY_FORMAT_TEX_UV2;
 }
 
@@ -403,7 +402,7 @@ Color MeshDataTool::get_vertex_color(int p_idx) const {
 void MeshDataTool::set_vertex_color(int p_idx, const Color &p_color) {
 
 	ERR_FAIL_INDEX(p_idx, vertices.size());
-	vertices[p_idx].color = p_color;
+	vertices.write[p_idx].color = p_color;
 	format |= Mesh::ARRAY_FORMAT_COLOR;
 }
 
@@ -415,7 +414,7 @@ Vector<int> MeshDataTool::get_vertex_bones(int p_idx) const {
 void MeshDataTool::set_vertex_bones(int p_idx, const Vector<int> &p_bones) {
 
 	ERR_FAIL_INDEX(p_idx, vertices.size());
-	vertices[p_idx].bones = p_bones;
+	vertices.write[p_idx].bones = p_bones;
 	format |= Mesh::ARRAY_FORMAT_BONES;
 }
 
@@ -426,7 +425,7 @@ Vector<float> MeshDataTool::get_vertex_weights(int p_idx) const {
 }
 void MeshDataTool::set_vertex_weights(int p_idx, const Vector<float> &p_weights) {
 	ERR_FAIL_INDEX(p_idx, vertices.size());
-	vertices[p_idx].weights = p_weights;
+	vertices.write[p_idx].weights = p_weights;
 	format |= Mesh::ARRAY_FORMAT_WEIGHTS;
 }
 
@@ -439,7 +438,7 @@ Variant MeshDataTool::get_vertex_meta(int p_idx) const {
 void MeshDataTool::set_vertex_meta(int p_idx, const Variant &p_meta) {
 
 	ERR_FAIL_INDEX(p_idx, vertices.size());
-	vertices[p_idx].meta = p_meta;
+	vertices.write[p_idx].meta = p_meta;
 }
 
 Vector<int> MeshDataTool::get_vertex_edges(int p_idx) const {
@@ -472,7 +471,7 @@ Variant MeshDataTool::get_edge_meta(int p_idx) const {
 void MeshDataTool::set_edge_meta(int p_idx, const Variant &p_meta) {
 
 	ERR_FAIL_INDEX(p_idx, edges.size());
-	edges[p_idx].meta = p_meta;
+	edges.write[p_idx].meta = p_meta;
 }
 
 int MeshDataTool::get_face_vertex(int p_face, int p_vertex) const {
@@ -495,7 +494,7 @@ Variant MeshDataTool::get_face_meta(int p_face) const {
 void MeshDataTool::set_face_meta(int p_face, const Variant &p_meta) {
 
 	ERR_FAIL_INDEX(p_face, faces.size());
-	faces[p_face].meta = p_meta;
+	faces.write[p_face].meta = p_meta;
 }
 
 Vector3 MeshDataTool::get_face_normal(int p_face) const {

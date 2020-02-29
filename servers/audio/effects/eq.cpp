@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -31,8 +31,8 @@
 // Author: reduzio@gmail.com (C) 2006
 
 #include "eq.h"
-#include "error_macros.h"
-#include "math_funcs.h"
+#include "core/error_macros.h"
+#include "core/math/math_funcs.h"
 #include <math.h>
 
 #define POW2(v) ((v) * (v))
@@ -103,14 +103,16 @@ void EQ::recalculate_band_coefficients() {
 
 		//printf("band %i, precoefs = %f,%f,%f\n",i,c2a,c2b,c2c);
 
-		double r1, r2; //roots
+		// Default initializing to silence compiler warning about potential uninitialized use.
+		// Both variables are properly set in _solve_quadratic before use, or we continue if roots == 0.
+		double r1 = 0, r2 = 0; //roots
 		int roots = solve_quadratic(c2a, c2b, c2c, &r1, &r2);
 
 		ERR_CONTINUE(roots == 0);
 
-		band[i].c1 = 2.0 * ((0.5 - r1) / 2.0);
-		band[i].c2 = 2.0 * r1;
-		band[i].c3 = 2.0 * (0.5 + r1) * cos(th);
+		band.write[i].c1 = 2.0 * ((0.5 - r1) / 2.0);
+		band.write[i].c2 = 2.0 * r1;
+		band.write[i].c3 = 2.0 * (0.5 + r1) * cos(th);
 		//printf("band %i, coefs = %f,%f,%f\n",i,(float)bands[i].c1,(float)bands[i].c2,(float)bands[i].c3);
 	}
 }
@@ -180,7 +182,7 @@ void EQ::set_bands(const Vector<float> &p_bands) {
 	band.resize(p_bands.size());
 	for (int i = 0; i < p_bands.size(); i++) {
 
-		band[i].freq = p_bands[i];
+		band.write[i].freq = p_bands[i];
 	}
 
 	recalculate_band_coefficients();

@@ -1,4 +1,4 @@
-def can_build(platform):
+def can_build(env, platform):
     return True
 
 def configure(env):
@@ -6,7 +6,6 @@ def configure(env):
 
 def get_doc_classes():
     return [
-        "ResourceImporterTheora",
         "VideoStreamTheora",
     ]
 

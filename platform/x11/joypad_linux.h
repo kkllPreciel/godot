@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -33,9 +33,9 @@
 #define JOYPAD_LINUX_H
 
 #ifdef JOYDEV_ENABLED
+#include "core/os/mutex.h"
+#include "core/os/thread.h"
 #include "main/input_default.h"
-#include "os/mutex.h"
-#include "os/thread.h"
 
 struct input_absinfo;
 
@@ -72,7 +72,7 @@ private:
 	};
 
 	bool exit_udev;
-	Mutex *joy_mutex;
+	Mutex joy_mutex;
 	Thread *joy_thread;
 	InputDefault *input;
 	Joypad joypads[JOYPADS_MAX];

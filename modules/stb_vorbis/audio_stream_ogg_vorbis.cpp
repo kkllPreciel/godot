@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -30,12 +30,7 @@
 
 #include "audio_stream_ogg_vorbis.h"
 
-#include "os/file_access.h"
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#include "thirdparty/misc/stb_vorbis.c"
-#pragma GCC diagnostic pop
+#include "core/os/file_access.h"
 
 void AudioStreamPlaybackOGGVorbis::_mix_internal(AudioFrame *p_buffer, int p_frames) {
 
@@ -62,7 +57,7 @@ void AudioStreamPlaybackOGGVorbis::_mix_internal(AudioFrame *p_buffer, int p_fra
 
 		if (todo) {
 			//end of file!
-			if (vorbis_stream->loop) {
+			if (vorbis_stream->loop && mixed > 0) {
 				//loop
 				seek(vorbis_stream->loop_offset);
 				loops++;
@@ -168,32 +163,32 @@ void AudioStreamOGGVorbis::clear_data() {
 	}
 }
 
-void AudioStreamOGGVorbis::set_data(const PoolVector<uint8_t> &p_data) {
+void AudioStreamOGGVorbis::set_data(const Vector<uint8_t> &p_data) {
 
 	int src_data_len = p_data.size();
 #define MAX_TEST_MEM (1 << 20)
 
 	uint32_t alloc_try = 1024;
-	PoolVector<char> alloc_mem;
-	PoolVector<char>::Write w;
+	Vector<char> alloc_mem;
+	char *w;
 	stb_vorbis *ogg_stream = NULL;
 	stb_vorbis_alloc ogg_alloc;
 
 	while (alloc_try < MAX_TEST_MEM) {
 
 		alloc_mem.resize(alloc_try);
-		w = alloc_mem.write();
+		w = alloc_mem.ptrw();
 
-		ogg_alloc.alloc_buffer = w.ptr();
+		ogg_alloc.alloc_buffer = w;
 		ogg_alloc.alloc_buffer_length_in_bytes = alloc_try;
 
-		PoolVector<uint8_t>::Read src_datar = p_data.read();
+		const uint8_t *src_datar = p_data.ptr();
 
 		int error;
-		ogg_stream = stb_vorbis_open_memory((const unsigned char *)src_datar.ptr(), src_data_len, &error, &ogg_alloc);
+		ogg_stream = stb_vorbis_open_memory((const unsigned char *)src_datar, src_data_len, &error, &ogg_alloc);
 
 		if (!ogg_stream && error == VORBIS_outofmem) {
-			w = PoolVector<char>::Write();
+
 			alloc_try *= 2;
 		} else {
 
@@ -208,15 +203,13 @@ void AudioStreamOGGVorbis::set_data(const PoolVector<uint8_t> &p_data) {
 			//does this work? (it's less mem..)
 			//decode_mem_size = ogg_alloc.alloc_buffer_length_in_bytes + info.setup_memory_required + info.temp_memory_required + info.max_frame_size;
 
-			//print_line("succeeded "+itos(ogg_alloc.alloc_buffer_length_in_bytes)+" setup "+itos(info.setup_memory_required)+" setup temp "+itos(info.setup_temp_memory_required)+" temp "+itos(info.temp_memory_required)+" maxframe"+itos(info.max_frame_size));
-
 			length = stb_vorbis_stream_length_in_seconds(ogg_stream);
 			stb_vorbis_close(ogg_stream);
 
 			// free any existing data
 			clear_data();
 
-			data = AudioServer::get_singleton()->audio_data_alloc(src_data_len, src_datar.ptr());
+			data = AudioServer::get_singleton()->audio_data_alloc(src_data_len, src_datar);
 			data_len = src_data_len;
 
 			break;
@@ -224,15 +217,15 @@ void AudioStreamOGGVorbis::set_data(const PoolVector<uint8_t> &p_data) {
 	}
 }
 
-PoolVector<uint8_t> AudioStreamOGGVorbis::get_data() const {
+Vector<uint8_t> AudioStreamOGGVorbis::get_data() const {
 
-	PoolVector<uint8_t> vdata;
+	Vector<uint8_t> vdata;
 
 	if (data_len && data) {
 		vdata.resize(data_len);
 		{
-			PoolVector<uint8_t>::Write w = vdata.write();
-			copymem(w.ptr(), data, data_len);
+			uint8_t *w = vdata.ptrw();
+			copymem(w, data, data_len);
 		}
 	}
 
@@ -272,14 +265,15 @@ void AudioStreamOGGVorbis::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_loop_offset", "seconds"), &AudioStreamOGGVorbis::set_loop_offset);
 	ClassDB::bind_method(D_METHOD("get_loop_offset"), &AudioStreamOGGVorbis::get_loop_offset);
 
-	ADD_PROPERTY(PropertyInfo(Variant::POOL_BYTE_ARRAY, "data", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NOEDITOR), "set_data", "get_data");
-	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "loop", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NOEDITOR), "set_loop", "has_loop");
-	ADD_PROPERTY(PropertyInfo(Variant::REAL, "loop_offset", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NOEDITOR), "set_loop_offset", "get_loop_offset");
+	ADD_PROPERTY(PropertyInfo(Variant::PACKED_BYTE_ARRAY, "data", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NOEDITOR), "set_data", "get_data");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "loop"), "set_loop", "has_loop");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "loop_offset"), "set_loop_offset", "get_loop_offset");
 }
 
 AudioStreamOGGVorbis::AudioStreamOGGVorbis() {
 
 	data = NULL;
+	data_len = 0;
 	length = 0;
 	sample_rate = 1;
 	channels = 1;

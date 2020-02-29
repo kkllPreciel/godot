@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -31,11 +31,9 @@
 #ifndef COLOR_H
 #define COLOR_H
 
-#include "math_funcs.h"
-#include "ustring.h"
-/**
-	@author Juan Linietsky <reduzio@gmail.com>
-*/
+#include "core/math/math_funcs.h"
+#include "core/ustring.h"
+
 struct Color {
 
 	union {
@@ -55,7 +53,9 @@ struct Color {
 	uint32_t to_rgba32() const;
 	uint32_t to_argb32() const;
 	uint32_t to_abgr32() const;
-	float gray() const;
+	uint64_t to_rgba64() const;
+	uint64_t to_argb64() const;
+	uint64_t to_abgr64() const;
 	float get_h() const;
 	float get_s() const;
 	float get_v() const;
@@ -69,7 +69,12 @@ struct Color {
 	}
 
 	Color operator+(const Color &p_color) const;
-	void operator+=(const Color &p_color);
+	_FORCE_INLINE_ void operator+=(const Color &p_color) {
+		r = r + p_color.r;
+		g = g + p_color.g;
+		b = b + p_color.b;
+		a = a + p_color.a;
+	}
 
 	Color operator-() const;
 	Color operator-(const Color &p_color) const;
@@ -84,6 +89,8 @@ struct Color {
 	Color operator/(const real_t &rvalue) const;
 	void operator/=(const Color &p_color);
 	void operator/=(const real_t &rvalue);
+
+	bool is_equal_approx(const Color &p_color) const;
 
 	void invert();
 	void contrast();
@@ -186,11 +193,13 @@ struct Color {
 	}
 
 	static Color hex(uint32_t p_hex);
+	static Color hex64(uint64_t p_hex);
 	static Color html(const String &p_color);
 	static bool html_is_valid(const String &p_color);
 	static Color named(const String &p_name);
 	String to_html(bool p_alpha = true) const;
-	Color from_hsv(float p_h, float p_s, float p_v, float p_a);
+	Color from_hsv(float p_h, float p_s, float p_v, float p_a) const;
+	static Color from_rgbe9995(uint32_t p_rgbe);
 
 	_FORCE_INLINE_ bool operator<(const Color &p_color) const; //used in set keys
 	operator String() const;

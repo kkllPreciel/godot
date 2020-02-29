@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2018 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2018 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -29,18 +29,19 @@
 /*************************************************************************/
 
 #include "stream_peer.h"
-#include "io/marshalls.h"
 
-Error StreamPeer::_put_data(const PoolVector<uint8_t> &p_data) {
+#include "core/io/marshalls.h"
+
+Error StreamPeer::_put_data(const Vector<uint8_t> &p_data) {
 
 	int len = p_data.size();
 	if (len == 0)
 		return OK;
-	PoolVector<uint8_t>::Read r = p_data.read();
+	const uint8_t *r = p_data.ptr();
 	return put_data(&r[0], len);
 }
 
-Array StreamPeer::_put_partial_data(const PoolVector<uint8_t> &p_data) {
+Array StreamPeer::_put_partial_data(const Vector<uint8_t> &p_data) {
 
 	Array ret;
 
@@ -51,7 +52,7 @@ Array StreamPeer::_put_partial_data(const PoolVector<uint8_t> &p_data) {
 		return ret;
 	}
 
-	PoolVector<uint8_t>::Read r = p_data.read();
+	const uint8_t *r = p_data.ptr();
 	int sent;
 	Error err = put_partial_data(&r[0], len, sent);
 
@@ -67,18 +68,18 @@ Array StreamPeer::_get_data(int p_bytes) {
 
 	Array ret;
 
-	PoolVector<uint8_t> data;
+	Vector<uint8_t> data;
 	data.resize(p_bytes);
 	if (data.size() != p_bytes) {
 
 		ret.push_back(ERR_OUT_OF_MEMORY);
-		ret.push_back(PoolVector<uint8_t>());
+		ret.push_back(Vector<uint8_t>());
 		return ret;
 	}
 
-	PoolVector<uint8_t>::Write w = data.write();
+	uint8_t *w = data.ptrw();
 	Error err = get_data(&w[0], p_bytes);
-	w = PoolVector<uint8_t>::Write();
+
 	ret.push_back(err);
 	ret.push_back(data);
 	return ret;
@@ -88,19 +89,18 @@ Array StreamPeer::_get_partial_data(int p_bytes) {
 
 	Array ret;
 
-	PoolVector<uint8_t> data;
+	Vector<uint8_t> data;
 	data.resize(p_bytes);
 	if (data.size() != p_bytes) {
 
 		ret.push_back(ERR_OUT_OF_MEMORY);
-		ret.push_back(PoolVector<uint8_t>());
+		ret.push_back(Vector<uint8_t>());
 		return ret;
 	}
 
-	PoolVector<uint8_t>::Write w = data.write();
+	uint8_t *w = data.ptrw();
 	int received;
 	Error err = get_partial_data(&w[0], p_bytes, received);
-	w = PoolVector<uint8_t>::Write();
 
 	if (err != OK) {
 		data.resize(0);
@@ -208,20 +208,26 @@ void StreamPeer::put_double(double p_val) {
 	}
 	put_data(buf, 8);
 }
+void StreamPeer::put_string(const String &p_string) {
+
+	CharString cs = p_string.ascii();
+	put_u32(cs.length());
+	put_data((const uint8_t *)cs.get_data(), cs.length());
+}
 void StreamPeer::put_utf8_string(const String &p_string) {
 
 	CharString cs = p_string.utf8();
 	put_u32(cs.length());
 	put_data((const uint8_t *)cs.get_data(), cs.length());
 }
-void StreamPeer::put_var(const Variant &p_variant) {
+void StreamPeer::put_var(const Variant &p_variant, bool p_full_objects) {
 
 	int len = 0;
 	Vector<uint8_t> buf;
-	encode_variant(p_variant, NULL, len);
+	encode_variant(p_variant, NULL, len, p_full_objects);
 	buf.resize(len);
 	put_32(len);
-	encode_variant(p_variant, buf.ptrw(), len);
+	encode_variant(p_variant, buf.ptrw(), len, p_full_objects);
 	put_data(buf.ptr(), buf.size());
 }
 
@@ -324,6 +330,8 @@ double StreamPeer::get_double() {
 }
 String StreamPeer::get_string(int p_bytes) {
 
+	if (p_bytes < 0)
+		p_bytes = get_u32();
 	ERR_FAIL_COND_V(p_bytes < 0, String());
 
 	Vector<char> buf;
@@ -331,11 +339,13 @@ String StreamPeer::get_string(int p_bytes) {
 	ERR_FAIL_COND_V(err != OK, String());
 	err = get_data((uint8_t *)&buf[0], p_bytes);
 	ERR_FAIL_COND_V(err != OK, String());
-	buf[p_bytes] = 0;
+	buf.write[p_bytes] = 0;
 	return buf.ptr();
 }
 String StreamPeer::get_utf8_string(int p_bytes) {
 
+	if (p_bytes < 0)
+		p_bytes = get_u32();
 	ERR_FAIL_COND_V(p_bytes < 0, String());
 
 	Vector<uint8_t> buf;
@@ -348,7 +358,7 @@ String StreamPeer::get_utf8_string(int p_bytes) {
 	ret.parse_utf8((const char *)buf.ptr(), buf.size());
 	return ret;
 }
-Variant StreamPeer::get_var() {
+Variant StreamPeer::get_var(bool p_allow_objects) {
 
 	int len = get_32();
 	Vector<uint8_t> var;
@@ -358,7 +368,9 @@ Variant StreamPeer::get_var() {
 	ERR_FAIL_COND_V(err != OK, Variant());
 
 	Variant ret;
-	decode_variant(ret, var.ptr(), len);
+	err = decode_variant(ret, var.ptr(), len, NULL, p_allow_objects);
+	ERR_FAIL_COND_V_MSG(err != OK, Variant(), "Error when trying to decode Variant.");
+
 	return ret;
 }
 
@@ -385,8 +397,9 @@ void StreamPeer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("put_u64", "value"), &StreamPeer::put_u64);
 	ClassDB::bind_method(D_METHOD("put_float", "value"), &StreamPeer::put_float);
 	ClassDB::bind_method(D_METHOD("put_double", "value"), &StreamPeer::put_double);
+	ClassDB::bind_method(D_METHOD("put_string", "value"), &StreamPeer::put_string);
 	ClassDB::bind_method(D_METHOD("put_utf8_string", "value"), &StreamPeer::put_utf8_string);
-	ClassDB::bind_method(D_METHOD("put_var", "value"), &StreamPeer::put_var);
+	ClassDB::bind_method(D_METHOD("put_var", "value", "full_objects"), &StreamPeer::put_var, DEFVAL(false));
 
 	ClassDB::bind_method(D_METHOD("get_8"), &StreamPeer::get_8);
 	ClassDB::bind_method(D_METHOD("get_u8"), &StreamPeer::get_u8);
@@ -398,9 +411,9 @@ void StreamPeer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_u64"), &StreamPeer::get_u64);
 	ClassDB::bind_method(D_METHOD("get_float"), &StreamPeer::get_float);
 	ClassDB::bind_method(D_METHOD("get_double"), &StreamPeer::get_double);
-	ClassDB::bind_method(D_METHOD("get_string", "bytes"), &StreamPeer::get_string);
-	ClassDB::bind_method(D_METHOD("get_utf8_string", "bytes"), &StreamPeer::get_utf8_string);
-	ClassDB::bind_method(D_METHOD("get_var"), &StreamPeer::get_var);
+	ClassDB::bind_method(D_METHOD("get_string", "bytes"), &StreamPeer::get_string, DEFVAL(-1));
+	ClassDB::bind_method(D_METHOD("get_utf8_string", "bytes"), &StreamPeer::get_utf8_string, DEFVAL(-1));
+	ClassDB::bind_method(D_METHOD("get_var", "allow_objects"), &StreamPeer::get_var, DEFVAL(false));
 
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "big_endian"), "set_big_endian", "is_big_endian_enabled");
 }
@@ -417,7 +430,7 @@ void StreamPeerBuffer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("clear"), &StreamPeerBuffer::clear);
 	ClassDB::bind_method(D_METHOD("duplicate"), &StreamPeerBuffer::duplicate);
 
-	ADD_PROPERTY(PropertyInfo(Variant::POOL_BYTE_ARRAY, "data_array"), "set_data_array", "get_data_array");
+	ADD_PROPERTY(PropertyInfo(Variant::PACKED_BYTE_ARRAY, "data_array"), "set_data_array", "get_data_array");
 }
 
 Error StreamPeerBuffer::put_data(const uint8_t *p_data, int p_bytes) {
@@ -429,7 +442,7 @@ Error StreamPeerBuffer::put_data(const uint8_t *p_data, int p_bytes) {
 		data.resize(pointer + p_bytes);
 	}
 
-	PoolVector<uint8_t>::Write w = data.write();
+	uint8_t *w = data.ptrw();
 	copymem(&w[pointer], p_data, p_bytes);
 
 	pointer += p_bytes;
@@ -464,8 +477,8 @@ Error StreamPeerBuffer::get_partial_data(uint8_t *p_buffer, int p_bytes, int &r_
 		r_received = p_bytes;
 	}
 
-	PoolVector<uint8_t>::Read r = data.read();
-	copymem(p_buffer, r.ptr() + pointer, r_received);
+	const uint8_t *r = data.ptr();
+	copymem(p_buffer, r + pointer, r_received);
 
 	pointer += r_received;
 	// FIXME: return what? OK or ERR_*
@@ -499,13 +512,13 @@ void StreamPeerBuffer::resize(int p_size) {
 	data.resize(p_size);
 }
 
-void StreamPeerBuffer::set_data_array(const PoolVector<uint8_t> &p_data) {
+void StreamPeerBuffer::set_data_array(const Vector<uint8_t> &p_data) {
 
 	data = p_data;
 	pointer = 0;
 }
 
-PoolVector<uint8_t> StreamPeerBuffer::get_data_array() const {
+Vector<uint8_t> StreamPeerBuffer::get_data_array() const {
 
 	return data;
 }
